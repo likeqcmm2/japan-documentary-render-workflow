@@ -1,0 +1,489 @@
+import json
+import argparse
+import math
+import re
+import shutil
+import subprocess
+from pathlib import Path
+
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Render final documentary video from shot JSON, generated images, LTX videos, WAV, and SRT.")
+    parser.add_argument("--project", default="/workspace/japan_project")
+    parser.add_argument("--input-json", default=None, help="Shot list JSON. Defaults to <project>/inputs/shot_list.json.")
+    parser.add_argument("--images-dir", default=None, help="GPT Image output directory. Defaults to <project>/generated_images.")
+    parser.add_argument("--ltx-dir", default=None, help="LTX video directory. Defaults to <project>/ltx_videos.")
+    parser.add_argument("--voice", required=True, help="Voice-over WAV/MP3 path.")
+    parser.add_argument("--srt", required=True, help="Subtitle SRT path.")
+    parser.add_argument("--output", default=None, help="Final MP4 path. Defaults to <project>/final/final_video.mp4.")
+    parser.add_argument("--width", type=int, default=1920)
+    parser.add_argument("--height", type=int, default=1080)
+    parser.add_argument("--fps", type=int, default=25)
+    return parser.parse_args()
+
+args = parse_args()
+PROJECT = Path(args.project)
+INPUT_JSON = Path(args.input_json) if args.input_json else PROJECT / "inputs" / "shot_list.json"
+IMAGES_DIR = Path(args.images_dir) if args.images_dir else PROJECT / "generated_images"
+LTX_DIR = Path(args.ltx_dir) if args.ltx_dir else PROJECT / "ltx_videos"
+ITEMS = json.loads(INPUT_JSON.read_text())
+CLIP_DIR = PROJECT / "clips_final_hardsub"
+BASE_CLIP_DIR = PROJECT / "clips_final_base"
+FINAL_DIR = PROJECT / "final"
+OVERLAY_DIR = PROJECT / "typing_overlays_final_archival"
+TMP_DIR = PROJECT / "tmp_final_hardsub"
+for folder in (CLIP_DIR, BASE_CLIP_DIR, FINAL_DIR, OVERLAY_DIR, TMP_DIR):
+    folder.mkdir(exist_ok=True)
+
+W, H, FPS = args.width, args.height, args.fps
+FONT_FILE = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
+BOLD_FONT_FILE = "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc"
+YUJI_BOKU_FONT_FILE = "/workspace/japan_project/assets/YujiBoku-Regular.ttf"
+GRAIN = PROJECT / "assets" / "grain.mp4"
+TYPE_SFX = PROJECT / "assets" / "keyboard-typing-sound-effect-335503.mp3"
+VOICE = Path(args.voice)
+SRT = Path(args.srt)
+GRAIN_OPACITY = {"light": 0.055, "medium": 0.095, "heavy": 0.14}
+
+
+def duration(item):
+    return max(0.04, float(item["end"]) - float(item["start"]))
+
+
+def clip_path(item):
+    return CLIP_DIR / f"clip_{int(item['id']):03d}.mp4"
+
+
+def source_path(item):
+    sid = int(item["id"])
+    if (item.get("media_type") or "").lower() == "video":
+        return LTX_DIR / f"shot_{sid:03d}.mp4"
+    return IMAGES_DIR / f"shot_{sid:03d}.png"
+
+
+def parse_scale_range(value):
+    if not value:
+        return 1.0, 1.08
+    nums = re.findall(r"[0-9]+(?:\.[0-9]+)?", value)
+    if len(nums) >= 2:
+        return float(nums[0]), float(nums[1])
+    if len(nums) == 1:
+        return float(nums[0]), float(nums[0])
+    return 1.0, 1.08
+
+
+def photo_filter(item, frames):
+    edit = item.get("edit") or {}
+    kb = edit.get("kenburns_type") or "static_hold"
+    z0, z1 = parse_scale_range(edit.get("kenburns_scale_range"))
+    den = max(frames - 1, 1)
+    if kb in ("none", "static_hold"):
+        z0 = z1 = max(z0, z1, 1.0)
+
+    z = f"{z0}+({z1 - z0})*on/{den}"
+    center_x = "iw/2-(iw/zoom/2)"
+    center_y = "ih/2-(ih/zoom/2)"
+    max_x = "iw-iw/zoom"
+    max_y = "ih-ih/zoom"
+    if kb == "pan_left_to_right":
+        x, y = f"({max_x})*on/{den}", center_y
+    elif kb == "pan_right_to_left":
+        x, y = f"({max_x})*(1-on/{den})", center_y
+    elif kb == "pan_top_to_bottom":
+        x, y = center_x, f"({max_y})*on/{den}"
+    elif kb == "pan_bottom_to_top":
+        x, y = center_x, f"({max_y})*(1-on/{den})"
+    elif kb == "pan_diagonal_tl_br":
+        x, y = f"({max_x})*on/{den}", f"({max_y})*on/{den}"
+    elif kb == "pan_diagonal_br_tl":
+        x, y = f"({max_x})*(1-on/{den})", f"({max_y})*(1-on/{den})"
+    else:
+        x, y = center_x, center_y
+
+    return (
+        "[0:v]scale=8000:-2,crop=8000:4500,setsar=1,"
+        f"zoompan=z='{z}':x='{x}':y='{y}':d={frames}:s={W}x{H}:fps={FPS},"
+        "format=yuv420p,setpts=PTS-STARTPTS[v0]"
+    )
+
+
+def video_filter():
+    return (
+        f"[0:v]fps={FPS},scale={W}:{H}:force_original_aspect_ratio=decrease,"
+        f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:black,"
+        "setsar=1,format=yuv420p,setpts=PTS-STARTPTS[v0]"
+    )
+
+
+def esc_path(path):
+    return str(path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
+
+
+def write_textfile(item, text, kind):
+    path = TMP_DIR / f"text_{int(item['id']):03d}_{kind}.txt"
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def wrap_text(text, font, max_width):
+    lines = []
+    for raw_line in text.splitlines():
+        current = ""
+        for ch in raw_line:
+            trial = current + ch
+            if current and font.getlength(trial) > max_width:
+                lines.append(current)
+                current = ch
+            else:
+                current = trial
+        lines.append(current)
+    return "\n".join(lines)
+
+
+def paper_texture(w, h, seed):
+    rng = (seed * 1103515245 + 12345) & 0x7fffffff
+    img = Image.new("RGBA", (w, h), (222, 199, 151, 246))
+    px = img.load()
+    for y in range(h):
+        for x in range(w):
+            rng = (rng * 1664525 + 1013904223) & 0xffffffff
+            n = ((rng >> 24) & 255) - 128
+            tone = int(n * 0.10)
+            base = (222 + tone, 199 + tone, 151 + tone, 246)
+            px[x, y] = base
+    return img
+
+
+def create_typing_overlay(item, clip_duration):
+    text = (item.get("edit") or {}).get("text_overlay_ja")
+    if not text:
+        return None, 0.0
+
+    sid = int(item["id"])
+    output = OVERLAY_DIR / f"typing_{sid:03d}.mov"
+    typing_duration = min(3.5, max(0.8, len(text.replace("\n", "")) * 0.08))
+    total_frames = max(1, int(math.ceil(clip_duration * FPS)))
+    if output.exists() and output.stat().st_size > 1000:
+        return output, typing_duration
+
+    ow, oh = 1160, 320
+    font_path = YUJI_BOKU_FONT_FILE if Path(YUJI_BOKU_FONT_FILE).exists() else BOLD_FONT_FILE
+    font = ImageFont.truetype(font_path, 46)
+    line_spacing = 12
+    visible_chars = list(text)
+
+    cmd = [
+        "ffmpeg", "-hide_banner", "-y",
+        "-f", "rawvideo", "-pix_fmt", "rgba", "-s", f"{ow}x{oh}", "-r", str(FPS), "-i", "-",
+        "-an", "-c:v", "qtrle", str(output),
+    ]
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    assert proc.stdin is not None
+    try:
+        for frame in range(total_frames):
+            t = frame / FPS
+            count = len(visible_chars)
+            if t < typing_duration:
+                count = max(0, min(len(visible_chars), int(math.ceil(len(visible_chars) * t / typing_duration))))
+            shown = "".join(visible_chars[:count])
+            shown = wrap_text(shown, font, ow - 150)
+
+            img = Image.new("RGBA", (ow, oh), (0, 0, 0, 0))
+            if shown:
+                draw = ImageDraw.Draw(img)
+                bbox = draw.multiline_textbbox((0, 0), shown, font=font, spacing=line_spacing)
+                text_w = bbox[2] - bbox[0]
+                text_h = bbox[3] - bbox[1]
+                pad_x, pad_y = 54, 34
+                plate_w = min(ow - 70, max(260, text_w + pad_x * 2))
+                plate_h = min(oh - 70, max(100, text_h + pad_y * 2))
+                px0, py0 = 28, 28
+                shadow = Image.new("RGBA", (ow, oh), (0, 0, 0, 0))
+                sd = ImageDraw.Draw(shadow)
+                sd.rounded_rectangle((px0 + 8, py0 + 8, px0 + plate_w + 8, py0 + plate_h + 8), radius=5, fill=(0, 0, 0, 95))
+                img.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(9)))
+                plate = paper_texture(int(plate_w), int(plate_h), sid + frame)
+                pd = ImageDraw.Draw(plate)
+                pd.rounded_rectangle((0, 0, plate_w - 1, plate_h - 1), radius=4, outline=(91, 63, 35, 235), width=3)
+                pd.rounded_rectangle((10, 10, plate_w - 11, plate_h - 11), radius=2, outline=(122, 84, 46, 170), width=1)
+                img.alpha_composite(plate, (px0, py0))
+                draw = ImageDraw.Draw(img)
+                tx = px0 + (plate_w - text_w) / 2 - bbox[0]
+                ty = py0 + (plate_h - text_h) / 2 - bbox[1]
+                draw.multiline_text((tx, ty), shown, font=font, fill=(42, 32, 24, 255), spacing=line_spacing)
+            proc.stdin.write(img.tobytes())
+    finally:
+        proc.stdin.close()
+    stderr = proc.stderr.read() if proc.stderr else b""
+    proc.wait()
+    if proc.returncode != 0:
+        raise RuntimeError(stderr.decode("utf-8", "ignore")[-3000:])
+    return output, typing_duration
+
+
+def parse_srt_time(value):
+    h, m, rest = value.strip().replace(",", ".").split(":")
+    return int(h) * 3600 + int(m) * 60 + float(rest)
+
+
+def fmt_srt_time(sec):
+    sec = max(0, sec)
+    h = int(sec // 3600)
+    m = int((sec % 3600) // 60)
+    s = sec - h * 3600 - m * 60
+    return f"{h:02d}:{m:02d}:{s:06.3f}".replace(".", ",")
+
+
+def wrap_japanese_sub(text, max_chars=23):
+    text = "".join(line.strip() for line in text.splitlines())
+    lines, cur = [], ""
+    for ch in text:
+        cur += ch
+        if len(cur) >= max_chars and ch in "、。！？｣」）)":
+            lines.append(cur)
+            cur = ""
+        elif len(cur) >= max_chars + 6:
+            lines.append(cur)
+            cur = ""
+    if cur:
+        lines.append(cur)
+    return "\n".join(lines[:2]) if len(lines) <= 2 else "\n".join([lines[0], "".join(lines[1:])])
+
+
+def load_srt_entries():
+    raw = SRT.read_text(encoding="utf-8-sig")
+    blocks = re.split(r"\n\s*\n", raw.strip())
+    entries = []
+    for block in blocks:
+        lines = [x.rstrip() for x in block.splitlines() if x.strip()]
+        if len(lines) < 2:
+            continue
+        time_line = next((x for x in lines if "-->" in x), None)
+        if not time_line:
+            continue
+        idx = lines.index(time_line)
+        a, b = [x.strip() for x in time_line.split("-->", 1)]
+        text = "\n".join(lines[idx + 1:])
+        entries.append((parse_srt_time(a), parse_srt_time(b), text))
+    return entries
+
+
+SRT_ENTRIES = load_srt_entries() if SRT.exists() else []
+SUBTITLE_STYLE = (
+    r"FontName=Noto Sans CJK JP\,FontSize=16\,PrimaryColour=&H00FFFFFF\,"
+    r"BackColour=&H99000000\,BorderStyle=4\,Outline=0\,Shadow=0\,"
+    r"Alignment=2\,MarginL=35\,MarginR=35\,MarginV=32"
+)
+
+
+def write_local_srt(item):
+    if (item.get("edit") or {}).get("hardsub") != "normal":
+        return None
+    sid = int(item["id"])
+    start, end = float(item["start"]), float(item["end"])
+    rows = []
+    for s, e, text in SRT_ENTRIES:
+        ls = max(s, start) - start
+        le = min(e, end) - start
+        if le - ls > 0.02:
+            rows.append((ls, le, wrap_japanese_sub(text)))
+    if not rows:
+        return None
+    path = TMP_DIR / f"shot_{sid:03d}_subs.srt"
+    body = []
+    for i, (s, e, text) in enumerate(rows, 1):
+        body.append(f"{i}\n{fmt_srt_time(s)} --> {fmt_srt_time(e)}\n{text}\n")
+    path.write_text("\n".join(body), encoding="utf-8")
+    return path
+
+def render_clip(item):
+    output = clip_path(item)
+    base_output = BASE_CLIP_DIR / f"clip_{int(item['id']):03d}_base.mp4"
+    if output.exists() and output.stat().st_size > 100000:
+        print(f"[skip] {output.name}", flush=True)
+        return
+
+    d = duration(item)
+    frames = max(1, int(round(d * FPS)))
+    src = source_path(item)
+    if not src.exists():
+        raise FileNotFoundError(src)
+
+    media = (item.get("media_type") or "").lower()
+    edit = item.get("edit") or {}
+    grain = edit.get("film_grain") or "none"
+    typing_overlay, typing_duration = create_typing_overlay(item, d)
+    typing = typing_overlay is not None
+
+    cmd = ["ffmpeg", "-hide_banner", "-y"]
+    if media == "video":
+        cmd += ["-stream_loop", "-1", "-i", str(src)]
+    else:
+        cmd += ["-loop", "1", "-i", str(src)]
+
+    input_count = 1
+    grain_idx = None
+    if grain != "none" and GRAIN.exists():
+        grain_idx = input_count
+        input_count += 1
+        cmd += ["-stream_loop", "-1", "-i", str(GRAIN)]
+
+    overlay_idx = None
+    if typing_overlay:
+        overlay_idx = input_count
+        input_count += 1
+        cmd += ["-i", str(typing_overlay)]
+
+    type_idx = None
+    if typing and TYPE_SFX.exists():
+        type_idx = input_count
+        input_count += 1
+        cmd += ["-stream_loop", "-1", "-i", str(TYPE_SFX)]
+
+    silent_idx = input_count
+    cmd += ["-f", "lavfi", "-t", f"{d:.3f}", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000"]
+
+    filters = [video_filter() if media == "video" else photo_filter(item, frames)]
+    current = "v0"
+
+    if grain_idx is not None:
+        opacity = GRAIN_OPACITY.get(grain, 0.095)
+        filters.append(
+            f"[{grain_idx}:v]fps={FPS},scale={W}:{H}:force_original_aspect_ratio=increase,"
+            f"crop={W}:{H},trim=duration={d:.3f},setpts=PTS-STARTPTS[g]"
+        )
+        filters.append(f"[{current}][g]blend=all_mode=screen:all_opacity={opacity}[vgrain]")
+        current = "vgrain"
+
+    if edit.get("vignette"):
+        filters.append(f"[{current}]vignette=PI/5[vvig]")
+        current = "vvig"
+
+    if overlay_idx is not None:
+        filters.append(f"[{overlay_idx}:v]fps={FPS},format=rgba,setpts=PTS-STARTPTS[tov]")
+        filters.append(f"[{current}][tov]overlay=80:90:eof_action=pass[vtyped]")
+        current = "vtyped"
+
+    filters.append(f"[{current}]trim=duration={d:.3f},setpts=PTS-STARTPTS[vout]")
+
+    if type_idx is not None:
+        filters.append(f"[{silent_idx}:a]atrim=0:{d:.3f},asetpts=PTS-STARTPTS[sa]")
+        filters.append(
+            f"[{type_idx}:a]atrim=0:{typing_duration:.3f},asetpts=PTS-STARTPTS,volume=0.35[ta]"
+        )
+        filters.append("[sa][ta]amix=inputs=2:duration=first:dropout_transition=0[aout]")
+    else:
+        filters.append(f"[{silent_idx}:a]atrim=0:{d:.3f},asetpts=PTS-STARTPTS[aout]")
+
+    cmd += [
+        "-filter_complex",
+        ";".join(filters),
+        "-map",
+        "[vout]",
+        "-map",
+        "[aout]",
+        "-t",
+        f"{d:.3f}",
+        "-c:v",
+        "h264_nvenc",
+        "-preset",
+        "p4",
+        "-cq",
+        "20",
+        "-pix_fmt",
+        "yuv420p",
+        "-r",
+        str(FPS),
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k",
+        "-ar",
+        "48000",
+        "-ac",
+        "2",
+        "-movflags",
+        "+faststart",
+        str(base_output),
+    ]
+    print(
+        f"[render] clip_{int(item['id']):03d} {media} {d:.3f}s grain={grain} typing={typing} hardsub={(item.get('edit') or {}).get('hardsub')}",
+        flush=True,
+    )
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    if result.returncode != 0:
+        print(result.stdout[-4000:], flush=True)
+        raise RuntimeError(f"ffmpeg failed for clip_{int(item['id']):03d}")
+
+    local_srt = write_local_srt(item)
+    if local_srt:
+        sub_cmd = [
+            "ffmpeg", "-hide_banner", "-y", "-i", str(base_output),
+            "-vf", f"subtitles='{esc_path(local_srt)}':fontsdir='/usr/share/fonts/opentype/noto':force_style={SUBTITLE_STYLE}",
+            "-c:v", "h264_nvenc", "-preset", "p4", "-cq", "20", "-pix_fmt", "yuv420p",
+            "-r", str(FPS), "-c:a", "copy", "-movflags", "+faststart", str(output),
+        ]
+        result = subprocess.run(sub_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        if result.returncode != 0:
+            print(result.stdout[-4000:], flush=True)
+            raise RuntimeError(f"subtitle burn failed for clip_{int(item['id']):03d}")
+    else:
+        shutil.copy2(base_output, output)
+
+
+for item in ITEMS:
+    render_clip(item)
+
+concat = TMP_DIR / "concat_list_final.txt"
+concat.write_text("".join(f"file '{clip_path(item)}'\n" for item in ITEMS), encoding="utf-8")
+
+visual = FINAL_DIR / "japan_project_visual_timeline_final_hardsub.mp4"
+cmd = [
+    "ffmpeg",
+    "-hide_banner",
+    "-y",
+    "-f",
+    "concat",
+    "-safe",
+    "0",
+    "-i",
+    str(concat),
+    "-c",
+    "copy",
+    "-movflags",
+    "+faststart",
+    str(visual),
+]
+print("[concat]", visual, flush=True)
+result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+if result.returncode != 0:
+    print(result.stdout[-4000:], flush=True)
+    raise RuntimeError("concat failed")
+
+final = Path(args.output) if args.output else FINAL_DIR / "final_video.mp4"
+final.parent.mkdir(parents=True, exist_ok=True)
+final_duration = f"{float(ITEMS[-1]['end']):.3f}"
+cmd = [
+    "ffmpeg", "-hide_banner", "-y",
+    "-i", str(visual),
+    "-i", str(VOICE),
+    "-filter_complex", (
+        "[0:a]volume=1.0[sfx];[1:a]volume=1.0[vo];"
+        "[vo][sfx]amix=inputs=2:duration=first:dropout_transition=0[a]"
+    ),
+    "-map", "0:v",
+    "-map", "[a]",
+    "-t", final_duration,
+    "-c:v", "copy",
+    "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
+    "-movflags", "+faststart",
+    str(final),
+]
+print("[final]", final, flush=True)
+result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+if result.returncode != 0:
+    print(result.stdout[-6000:], flush=True)
+    raise RuntimeError("final mux failed")
+
+print("[done]", final, flush=True)

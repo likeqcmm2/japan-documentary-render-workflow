@@ -1,0 +1,14 @@
+{
+  "name": "japan-documentary-render-workflow",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Production workflow for GPT Image, LTX 2.3 I2V, FFmpeg documentary rendering, selective hardsubs, and Drive upload.",
+  "type": "commonjs",
+  "scripts": {
+    "generate-images": "node scripts/generate_images_from_shot_json.js",
+    "check": "python3 scripts/validate_project.py"
+  },
+  "dependencies": {
+    "openai": "^5.10.2"
+  }
+}

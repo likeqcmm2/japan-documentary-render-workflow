@@ -1,0 +1,17 @@
+.DS_Store
+node_modules/
+__pycache__/
+*.pyc
+.env
+secrets/.env
+secrets/rclone.conf
+inputs/
+generated_images/
+ltx_videos/
+clips_final_hardsub/
+clips_final_base/
+typing_overlays_final_archival/
+tmp_final_hardsub/
+final/
+*.log
+*_log.jsonl
