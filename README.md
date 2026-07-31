@@ -445,6 +445,18 @@ Expected:
 NotoSansCJK-Regular.ttc: "Noto Sans CJK JP" "Regular"
 ```
 
+Manual fallback if the setup script cannot install apt packages:
+
+```bash
+apt-get update
+apt-get install -y fonts-noto-cjk fontconfig
+fc-cache -f
+fc-match "Noto Sans CJK JP"
+```
+
+Official font source if manual download is needed instead of apt:
+[Google Noto CJK on GitHub](https://github.com/notofonts/noto-cjk).
+
 ### GPT Image says `Missing OPENAI_API_KEY`
 
 Most likely cause: `secrets/.env` was not copied to Vast, or it was removed by repo sync.
