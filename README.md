@@ -131,6 +131,45 @@ scripts/download_ltx_models.sh
 
 The helper installs `huggingface_hub` and `hf_xet`. If a model is not found in the default repo, place it manually according to `model_manifest.json`.
 
+After download, verify exact model placement:
+
+```bash
+python3 - <<'PY'
+from pathlib import Path
+checks = [
+  ("checkpoints", "ltx-2.3-22b-dev-fp8.safetensors"),
+  ("text_encoders", "gemma_3_12B_it_fp4_mixed.safetensors"),
+  ("latent_upscale_models", "ltx-2.3-spatial-upscaler-x2-1.1.safetensors"),
+  ("loras", "ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors"),
+  ("loras", "gemma-3-12b-it-abliterated_lora_rank64_bf16.safetensors"),
+]
+for folder, name in checks:
+    path = Path("/workspace/ComfyUI/models") / folder / name
+    print(path, path.exists(), path.stat().st_size if path.exists() else None)
+PY
+```
+
+Expected production-tested sizes:
+
+```text
+ltx-2.3-22b-dev-fp8.safetensors                                      29145431166
+gemma_3_12B_it_fp4_mixed.safetensors                                  9447702218
+ltx-2.3-spatial-upscaler-x2-1.1.safetensors                            995743560
+ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors 2741024390
+gemma-3-12b-it-abliterated_lora_rank64_bf16.safetensors                628203616
+```
+
+After downloading new models, restart ComfyUI so the model registry reloads:
+
+```bash
+pgrep -af "ComfyUI|main.py"
+kill <COMFY_MAIN_PID> || true
+sleep 5
+curl -fsS http://127.0.0.1:18188/system_stats >/dev/null && echo comfy_api_ready
+```
+
+On the tested Vast templates, killing the ComfyUI `main.py` process lets the supervisor restart it automatically.
+
 ## New Vast Server Setup
 
 Assumption: the Vast server uses the same ComfyUI template as the production server:
@@ -185,6 +224,13 @@ ssh -p <PORT> root@<HOST> 'chmod 600 /workspace/japan-documentary-render-workflo
 ```
 
 If `.env` is missing on the Macbook, ask the user to fill it before running paid API steps.
+
+Important: if you use `rsync --delete` to update the repo folder on Vast, it can remove `secrets/.env` because real secrets are not in git. Always copy `.env` again after syncing/cloning the repo:
+
+```bash
+scp -P <PORT> /Users/truongdonghai/Desktop/Japan_Documentary_Render_Secrets/.env root@<HOST>:/workspace/japan-documentary-render-workflow/secrets/.env
+ssh -p <PORT> root@<HOST> 'chmod 600 /workspace/japan-documentary-render-workflow/secrets/.env'
+```
 
 ## Full Run
 
@@ -245,6 +291,73 @@ python3 scripts/render_final_video.py \
 scripts/upload_drive.sh /workspace/japan_project/final/final_video.mp4
 ```
 
+## Smoke Test on a New Vast Server
+
+Before running full production on a new server, test a tiny subset first. This avoids spending hours before discovering setup issues.
+
+Create a 4-shot subset locally or on Vast:
+
+```bash
+python3 - <<'PY'
+import json
+from pathlib import Path
+items = json.loads(Path("/workspace/japan_project/inputs/shot_list.json").read_text())
+Path("/workspace/japan_project/inputs/smoke_first4.json").write_text(
+    json.dumps(items[:4], ensure_ascii=False, indent=2),
+    encoding="utf-8",
+)
+PY
+```
+
+Generate only those images:
+
+```bash
+node scripts/generate_images_from_shot_json.js \
+  --input /workspace/japan_project/inputs/smoke_first4.json \
+  --output /workspace/japan_project/generated_images_smoke
+```
+
+Render only the first video shot through LTX:
+
+```bash
+python3 - <<'PY'
+import json
+from pathlib import Path
+items = json.loads(Path("/workspace/japan_project/inputs/smoke_first4.json").read_text())
+video = [x for x in items if (x.get("media_type") or "").lower() == "video"][:1]
+Path("/workspace/japan_project/inputs/smoke_ltx_one.json").write_text(
+    json.dumps(video, ensure_ascii=False, indent=2),
+    encoding="utf-8",
+)
+PY
+
+python3 scripts/run_ltx_videos.py \
+  --project /workspace/japan_project \
+  --input-json /workspace/japan_project/inputs/smoke_ltx_one.json \
+  --images-dir /workspace/japan_project/generated_images_smoke \
+  --output-dir /workspace/japan_project/ltx_videos_smoke \
+  --payload /workspace/japan_project/comfy_workflows/ltx-2.3-i2v.payload.json
+```
+
+Render the short smoke video:
+
+```bash
+python3 scripts/render_final_video.py \
+  --project /workspace/japan_project \
+  --input-json /workspace/japan_project/inputs/smoke_first4.json \
+  --images-dir /workspace/japan_project/generated_images_smoke \
+  --ltx-dir /workspace/japan_project/ltx_videos_smoke \
+  --voice /workspace/japan_project/inputs/voice.wav \
+  --srt /workspace/japan_project/inputs/subtitles.srt \
+  --output /workspace/japan_project/final/smoke_first4.mp4
+```
+
+Upload smoke output to verify rclone:
+
+```bash
+scripts/upload_drive.sh /workspace/japan_project/final/smoke_first4.mp4 Japan_Project_Render_Workflow/smoke_tests
+```
+
 ## Timing Expectations
 
 Do not terminate a long run just because it appears slow.
@@ -277,6 +390,86 @@ Connection reset by peer
 ```
 
 This was not a prompt/model error. The script now retries Comfy API calls. If the command exits anyway, rerun it; completed video shots are skipped.
+
+## New Vast Troubleshooting Notes
+
+These issues were found and fixed while smoke-testing a brand-new Vast server on July 31, 2026.
+
+### `setup_vast.sh` fails on pip
+
+Symptom:
+
+```text
+ERROR: Cannot uninstall pip 24.0, RECORD file not found. The package was installed by debian.
+```
+
+Fix:
+
+`setup_vast.sh` no longer upgrades Debian's system pip directly. It retries package installation with `--break-system-packages`.
+
+### `node: command not found`
+
+Symptom:
+
+```text
+bash: node: command not found
+```
+
+Fix:
+
+`setup_vast.sh` now installs `nodejs npm` with apt if the Vast template is missing Node. OpenAI image generation requires Node.
+
+### GPT Image says `Missing OPENAI_API_KEY`
+
+Most likely cause: `secrets/.env` was not copied to Vast, or it was removed by repo sync.
+
+Fix:
+
+```bash
+scp -P <PORT> /Users/truongdonghai/Desktop/Japan_Documentary_Render_Secrets/.env root@<HOST>:/workspace/japan-documentary-render-workflow/secrets/.env
+ssh -p <PORT> root@<HOST> 'chmod 600 /workspace/japan-documentary-render-workflow/secrets/.env'
+```
+
+Then rerun image generation.
+
+### `hf download` downloads zero files
+
+Cause: wrong Hugging Face repo/path. The LTX files are spread across multiple repos, not a single `Lightricks/LTX-Video` repo.
+
+Fix:
+
+Use the current `scripts/download_ltx_models.sh`, which downloads these exact files:
+
+```text
+Lightricks/LTX-2.3-fp8/ltx-2.3-22b-dev-fp8.safetensors
+Lightricks/LTX-2.3/ltx-2.3-spatial-upscaler-x2-1.1.safetensors
+Comfy-Org/ltx-2.3/split_files/loras/ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors
+Comfy-Org/ltx-2/split_files/loras/gemma-3-12b-it-abliterated_lora_rank64_bf16.safetensors
+Comfy-Org/ltx-2/split_files/text_encoders/gemma_3_12B_it_fp4_mixed.safetensors
+```
+
+The script moves files downloaded under `split_files/...` into the flat Comfy folders required by the payload.
+
+### LTX models downloaded but Comfy still cannot find them
+
+Cause: ComfyUI was already running before the models were downloaded.
+
+Fix:
+
+Restart ComfyUI and then test `curl http://127.0.0.1:18188/system_stats`.
+
+### FFmpeg/NVENC fails on RTX 5090 template
+
+Symptom:
+
+```text
+OpenEncodeSessionEx failed: unsupported device
+No capable devices found
+```
+
+Fix:
+
+`render_final_video.py` automatically retries failed `h264_nvenc` commands with `libx264`. The output should still be correct, just slower to encode.
 
 ## Quality Notes
 
