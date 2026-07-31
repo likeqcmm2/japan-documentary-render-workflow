@@ -18,11 +18,30 @@ Do **not** commit real API keys, Hugging Face tokens, rclone config, Google cred
 
 Secrets live locally:
 
-- On Mac: `secrets/.env` or the user-provided keychain/config.
+- On Mac: `/Users/truongdonghai/Desktop/Japan_Documentary_Render_Secrets`.
 - On Vast: `/workspace/japan_project/secrets/.env` or shell environment variables.
 - rclone config is configured on the machine, not committed.
 
 See `secrets/README.md`.
+
+For this production setup, the Macbook-local secrets/config folder is:
+
+```text
+/Users/truongdonghai/Desktop/Japan_Documentary_Render_Secrets
+```
+
+Expected local files:
+
+```text
+/Users/truongdonghai/Desktop/Japan_Documentary_Render_Secrets/.env
+/Users/truongdonghai/Desktop/Japan_Documentary_Render_Secrets/rclone.conf
+```
+
+If `.env` does not exist yet, create it from:
+
+```text
+/Users/truongdonghai/Desktop/Japan_Documentary_Render_Secrets/.env.template
+```
 
 ## Expected Input
 
@@ -153,6 +172,17 @@ Configure rclone if it is not already configured:
 rclone config
 rclone lsd gdrive:
 ```
+
+If running from the owner's Macbook, prefer copying the existing local secrets/config to the Vast server:
+
+```bash
+ssh -p <PORT> root@<HOST> 'mkdir -p /workspace/japan-documentary-render-workflow/secrets /root/.config/rclone && chmod 700 /root/.config/rclone'
+scp -P <PORT> /Users/truongdonghai/Desktop/Japan_Documentary_Render_Secrets/.env root@<HOST>:/workspace/japan-documentary-render-workflow/secrets/.env
+scp -P <PORT> /Users/truongdonghai/Desktop/Japan_Documentary_Render_Secrets/rclone.conf root@<HOST>:/root/.config/rclone/rclone.conf
+ssh -p <PORT> root@<HOST> 'chmod 600 /workspace/japan-documentary-render-workflow/secrets/.env /root/.config/rclone/rclone.conf'
+```
+
+If `.env` is missing on the Macbook, ask the user to fill it before running paid API steps.
 
 ## Full Run
 
