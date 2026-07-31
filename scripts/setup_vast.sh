@@ -23,6 +23,13 @@ if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
   apt-get update >/dev/null
   DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs npm >/dev/null
 fi
+
+if ! fc-match "Noto Sans CJK JP" 2>/dev/null | grep -q "NotoSansCJK"; then
+  echo "[setup] Japanese CJK fonts missing; installing fonts-noto-cjk"
+  apt-get update >/dev/null
+  DEBIAN_FRONTEND=noninteractive apt-get install -y fonts-noto-cjk >/dev/null
+  fc-cache -f >/dev/null
+fi
 (cd "$REPO_DIR" && npm install)
 
 if [ -d "$COMFY" ]; then

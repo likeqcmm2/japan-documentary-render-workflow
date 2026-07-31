@@ -191,6 +191,8 @@ scripts/setup_vast.sh
 
 `setup_vast.sh` installs required Python packages, Node/npm if the Vast template is missing them, and the repo's npm dependency for OpenAI image generation.
 
+It also installs `fonts-noto-cjk` when Japanese subtitle fonts are missing. Without this package, SRT hardsubs may render as square boxes.
+
 Then create local secrets on Vast:
 
 ```bash
@@ -418,6 +420,30 @@ bash: node: command not found
 Fix:
 
 `setup_vast.sh` now installs `nodejs npm` with apt if the Vast template is missing Node. OpenAI image generation requires Node.
+
+### Japanese subtitles render as square boxes
+
+Symptom:
+
+```text
+□□□□□□
+```
+
+Cause: the new Vast template does not have `fonts-noto-cjk`; FFmpeg falls back to DejaVu Sans, which lacks Japanese glyphs.
+
+Fix:
+
+Run `scripts/setup_vast.sh` again. It now installs `fonts-noto-cjk` and refreshes fontconfig. Verify:
+
+```bash
+fc-match "Noto Sans CJK JP"
+```
+
+Expected:
+
+```text
+NotoSansCJK-Regular.ttc: "Noto Sans CJK JP" "Regular"
+```
 
 ### GPT Image says `Missing OPENAI_API_KEY`
 
