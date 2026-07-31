@@ -16,7 +16,8 @@ if [ -n "${HF_TOKEN:-}" ]; then
   export HF_TOKEN
 fi
 
-python3 -m pip install --upgrade huggingface_hub hf_xet >/dev/null
+python3 -m pip install --upgrade huggingface_hub hf_xet >/dev/null 2>&1 || \
+  python3 -m pip install --break-system-packages --upgrade huggingface_hub hf_xet >/dev/null
 
 mkdir -p "$COMFY/models/checkpoints" "$COMFY/models/upscale_models" "$COMFY/models/loras" "$COMFY/models/text_encoders"
 

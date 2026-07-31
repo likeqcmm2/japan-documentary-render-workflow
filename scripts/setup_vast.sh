@@ -15,8 +15,8 @@ cp "$REPO_DIR"/assets/keyboard-typing-sound-effect-335503.mp3 "$PROJECT/assets/k
 cp "$REPO_DIR"/assets/YujiBoku-Regular.ttf "$PROJECT/assets/YujiBoku-Regular.ttf"
 cp "$REPO_DIR"/comfy_workflows/ltx-2.3-i2v.payload.json "$PROJECT/comfy_workflows/ltx-2.3-i2v.payload.json"
 
-python3 -m pip install --upgrade pip >/dev/null
-python3 -m pip install pillow huggingface_hub hf_xet >/dev/null
+python3 -m pip install pillow huggingface_hub hf_xet >/dev/null 2>&1 || \
+  python3 -m pip install --break-system-packages pillow huggingface_hub hf_xet >/dev/null
 
 if command -v npm >/dev/null 2>&1; then
   (cd "$REPO_DIR" && npm install)
