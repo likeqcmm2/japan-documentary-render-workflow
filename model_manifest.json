@@ -5,26 +5,36 @@
   "models_referenced_by_payload": [
     {
       "filename": "ltx-2.3-22b-dev-fp8.safetensors",
+      "hf_repo": "Lightricks/LTX-2.3-fp8",
+      "hf_path": "ltx-2.3-22b-dev-fp8.safetensors",
       "target_dir_hint": "ComfyUI/models/checkpoints",
       "used_by_nodes": ["320:316 CheckpointLoaderSimple", "320:317 LTXAVTextEncoderLoader", "320:279 LTXVAudioVAELoader"]
     },
     {
       "filename": "gemma_3_12B_it_fp4_mixed.safetensors",
+      "hf_repo": "Comfy-Org/ltx-2",
+      "hf_path": "split_files/text_encoders/gemma_3_12B_it_fp4_mixed.safetensors",
       "target_dir_hint": "ComfyUI/models/text_encoders",
       "used_by_nodes": ["320:317 LTXAVTextEncoderLoader"]
     },
     {
       "filename": "ltx-2.3-spatial-upscaler-x2-1.1.safetensors",
+      "hf_repo": "Lightricks/LTX-2.3",
+      "hf_path": "ltx-2.3-spatial-upscaler-x2-1.1.safetensors",
       "target_dir_hint": "ComfyUI/models/latent_upscale_models",
       "used_by_nodes": ["320:311 LatentUpscaleModelLoader"]
     },
     {
       "filename": "ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors",
+      "hf_repo": "Comfy-Org/ltx-2.3",
+      "hf_path": "split_files/loras/ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors",
       "target_dir_hint": "ComfyUI/models/loras",
       "used_by_nodes": ["320:285 LoraLoaderModelOnly"]
     },
     {
       "filename": "gemma-3-12b-it-abliterated_lora_rank64_bf16.safetensors",
+      "hf_repo": "Comfy-Org/ltx-2",
+      "hf_path": "split_files/loras/gemma-3-12b-it-abliterated_lora_rank64_bf16.safetensors",
       "target_dir_hint": "ComfyUI/models/loras",
       "used_by_nodes": ["320:324 LoraLoader"]
     }
