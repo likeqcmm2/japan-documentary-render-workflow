@@ -19,7 +19,7 @@ fi
 python3 -m pip install --upgrade huggingface_hub hf_xet >/dev/null 2>&1 || \
   python3 -m pip install --break-system-packages --upgrade huggingface_hub hf_xet >/dev/null
 
-mkdir -p "$COMFY/models/checkpoints" "$COMFY/models/upscale_models" "$COMFY/models/loras" "$COMFY/models/text_encoders"
+mkdir -p "$COMFY/models/checkpoints" "$COMFY/models/latent_upscale_models" "$COMFY/models/loras" "$COMFY/models/text_encoders"
 
 echo "[download] repo=$REPO_ID"
 echo "[download] If a file is not found in this repo, read model_manifest.json and place it manually in the target dir."
@@ -30,7 +30,7 @@ huggingface-cli download "$REPO_ID" \
 
 huggingface-cli download "$REPO_ID" \
   --include "ltx-2.3-spatial-upscaler-x2-1.1.safetensors" \
-  --local-dir "$COMFY/models/upscale_models" || true
+  --local-dir "$COMFY/models/latent_upscale_models" || true
 
 huggingface-cli download "$REPO_ID" \
   --include "ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors" \

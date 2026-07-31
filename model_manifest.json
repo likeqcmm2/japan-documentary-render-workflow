@@ -15,7 +15,7 @@
     },
     {
       "filename": "ltx-2.3-spatial-upscaler-x2-1.1.safetensors",
-      "target_dir_hint": "ComfyUI/models/upscale_models",
+      "target_dir_hint": "ComfyUI/models/latent_upscale_models",
       "used_by_nodes": ["320:311 LatentUpscaleModelLoader"]
     },
     {

@@ -119,7 +119,7 @@ The proven LTX payload references:
 
 - `ltx-2.3-22b-dev-fp8.safetensors`
 - `gemma_3_12B_it_fp4_mixed.safetensors`
-- `ltx-2.3-spatial-upscaler-x2-1.1.safetensors`
+- `ltx-2.3-spatial-upscaler-x2-1.1.safetensors` in `ComfyUI/models/latent_upscale_models`
 - `ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors`
 - `gemma-3-12b-it-abliterated_lora_rank64_bf16.safetensors`
 
