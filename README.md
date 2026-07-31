@@ -150,6 +150,8 @@ cd japan-documentary-render-workflow
 scripts/setup_vast.sh
 ```
 
+`setup_vast.sh` installs required Python packages, Node/npm if the Vast template is missing them, and the repo's npm dependency for OpenAI image generation.
+
 Then create local secrets on Vast:
 
 ```bash
