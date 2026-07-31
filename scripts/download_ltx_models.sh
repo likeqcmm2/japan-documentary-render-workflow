@@ -24,24 +24,30 @@ mkdir -p "$COMFY/models/checkpoints" "$COMFY/models/latent_upscale_models" "$COM
 echo "[download] repo=$REPO_ID"
 echo "[download] If a file is not found in this repo, read model_manifest.json and place it manually in the target dir."
 
-huggingface-cli download "$REPO_ID" \
+HF_ARGS=()
+if [ -n "${HF_TOKEN:-}" ]; then
+  HF_ARGS+=(--token "$HF_TOKEN")
+fi
+HF_ARGS+=(--max-workers 16)
+
+hf download "$REPO_ID" \
   --include "ltx-2.3-22b-dev-fp8.safetensors" \
-  --local-dir "$COMFY/models/checkpoints" || true
+  --local-dir "$COMFY/models/checkpoints" "${HF_ARGS[@]}" || true
 
-huggingface-cli download "$REPO_ID" \
+hf download "$REPO_ID" \
   --include "ltx-2.3-spatial-upscaler-x2-1.1.safetensors" \
-  --local-dir "$COMFY/models/latent_upscale_models" || true
+  --local-dir "$COMFY/models/latent_upscale_models" "${HF_ARGS[@]}" || true
 
-huggingface-cli download "$REPO_ID" \
+hf download "$REPO_ID" \
   --include "ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors" \
-  --local-dir "$COMFY/models/loras" || true
+  --local-dir "$COMFY/models/loras" "${HF_ARGS[@]}" || true
 
-huggingface-cli download "$REPO_ID" \
+hf download "$REPO_ID" \
   --include "gemma-3-12b-it-abliterated_lora_rank64_bf16.safetensors" \
-  --local-dir "$COMFY/models/loras" || true
+  --local-dir "$COMFY/models/loras" "${HF_ARGS[@]}" || true
 
-huggingface-cli download "$REPO_ID" \
+hf download "$REPO_ID" \
   --include "gemma_3_12B_it_fp4_mixed.safetensors" \
-  --local-dir "$COMFY/models/text_encoders" || true
+  --local-dir "$COMFY/models/text_encoders" "${HF_ARGS[@]}" || true
 
 echo "[download] done; verify missing files with model_manifest.json and ComfyUI startup logs."
