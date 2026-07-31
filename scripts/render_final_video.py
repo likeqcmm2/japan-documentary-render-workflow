@@ -47,6 +47,40 @@ SRT = Path(args.srt)
 GRAIN_OPACITY = {"light": 0.055, "medium": 0.095, "heavy": 0.14}
 
 
+def x264_fallback(cmd):
+    out = []
+    skip_next = False
+    for i, token in enumerate(cmd):
+        if skip_next:
+            skip_next = False
+            continue
+        if token == "h264_nvenc":
+            out.append("libx264")
+        elif token == "-cq":
+            skip_next = True
+        elif token == "-preset" and i + 1 < len(cmd) and cmd[i + 1] == "p4":
+            out.extend(["-preset", "medium", "-crf", "18"])
+            skip_next = True
+        else:
+            out.append(token)
+    return out
+
+
+def run_ffmpeg(cmd, label):
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    if result.returncode == 0:
+        return result
+    if "h264_nvenc" in cmd and (
+        "No capable devices found" in result.stdout
+        or "OpenEncodeSessionEx failed" in result.stdout
+        or "unsupported device" in result.stdout
+    ):
+        print(f"[fallback] {label}: h264_nvenc unavailable; retrying with libx264", flush=True)
+        fallback = x264_fallback(cmd)
+        result = subprocess.run(fallback, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    return result
+
+
 def duration(item):
     return max(0.04, float(item["end"]) - float(item["start"]))
 
@@ -411,7 +445,7 @@ def render_clip(item):
         f"[render] clip_{int(item['id']):03d} {media} {d:.3f}s grain={grain} typing={typing} hardsub={(item.get('edit') or {}).get('hardsub')}",
         flush=True,
     )
-    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    result = run_ffmpeg(cmd, f"clip_{int(item['id']):03d}")
     if result.returncode != 0:
         print(result.stdout[-4000:], flush=True)
         raise RuntimeError(f"ffmpeg failed for clip_{int(item['id']):03d}")
@@ -424,7 +458,7 @@ def render_clip(item):
             "-c:v", "h264_nvenc", "-preset", "p4", "-cq", "20", "-pix_fmt", "yuv420p",
             "-r", str(FPS), "-c:a", "copy", "-movflags", "+faststart", str(output),
         ]
-        result = subprocess.run(sub_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        result = run_ffmpeg(sub_cmd, f"clip_{int(item['id']):03d}_subtitles")
         if result.returncode != 0:
             print(result.stdout[-4000:], flush=True)
             raise RuntimeError(f"subtitle burn failed for clip_{int(item['id']):03d}")
@@ -456,7 +490,7 @@ cmd = [
     str(visual),
 ]
 print("[concat]", visual, flush=True)
-result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+result = run_ffmpeg(cmd, "concat")
 if result.returncode != 0:
     print(result.stdout[-4000:], flush=True)
     raise RuntimeError("concat failed")
@@ -481,7 +515,7 @@ cmd = [
     str(final),
 ]
 print("[final]", final, flush=True)
-result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+result = run_ffmpeg(cmd, "final_mux")
 if result.returncode != 0:
     print(result.stdout[-6000:], flush=True)
     raise RuntimeError("final mux failed")

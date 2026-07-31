@@ -286,6 +286,7 @@ The final production style includes:
 - Request pacing: max `15` concurrent, new request every `4s`.
 - LTX I2V: request `1920x1080`, `25fps`, duration `ceil(end-start)`.
 - FFmpeg render output: `1920x1080`, `25fps`, `h264_nvenc`.
+- If a new Vast template reports `h264_nvenc` / `OpenEncodeSessionEx failed` / `unsupported device`, `render_final_video.py` automatically retries that FFmpeg command with `libx264`.
 - Photo Ken Burns uses high-resolution intermediate scaling (`scale=8000`) before `zoompan` to avoid jerky motion.
 - Real grain asset from `assets/grain.mp4`, not synthetic FFmpeg noise.
 - `text_overlay_ja`: upper-left archival-paper plate, Yuji Boku font, typing animation, typing sound trimmed to the typing duration.
