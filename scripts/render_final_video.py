@@ -39,7 +39,7 @@ for folder in (CLIP_DIR, BASE_CLIP_DIR, FINAL_DIR, OVERLAY_DIR, TMP_DIR):
 W, H, FPS = args.width, args.height, args.fps
 FONT_FILE = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
 BOLD_FONT_FILE = "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc"
-YUJI_BOKU_FONT_FILE = "/workspace/japan_project/assets/YujiBoku-Regular.ttf"
+YUJI_BOKU_FONT_FILE = str(PROJECT / "assets" / "YujiBoku-Regular.ttf")
 GRAIN = PROJECT / "assets" / "grain.mp4"
 TYPE_SFX = PROJECT / "assets" / "keyboard-typing-sound-effect-335503.mp3"
 VOICE = Path(args.voice)

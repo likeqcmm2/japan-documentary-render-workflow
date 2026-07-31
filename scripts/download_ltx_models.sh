@@ -36,6 +36,10 @@ huggingface-cli download "$REPO_ID" \
   --local-dir "$COMFY/models/loras" || true
 
 huggingface-cli download "$REPO_ID" \
+  --include "gemma-3-12b-it-abliterated_lora_rank64_bf16.safetensors" \
+  --local-dir "$COMFY/models/loras" || true
+
+huggingface-cli download "$REPO_ID" \
   --include "gemma_3_12B_it_fp4_mixed.safetensors" \
   --local-dir "$COMFY/models/text_encoders" || true
 
