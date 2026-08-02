@@ -15,6 +15,7 @@ const MAX_CONCURRENT_REQUESTS = 15;
 const REQUEST_START_INTERVAL_MS = 4_000;
 const MAX_RETRIES = 2;
 const RETRY_BASE_DELAY_MS = 5_000;
+const POST_PASS_RETRY_ROUNDS = 3;
 
 function loadEnvFile(envPath) {
   if (!fs.existsSync(envPath)) return;
@@ -196,78 +197,115 @@ async function generateOne({ client, job, outputPath }) {
   return { ok: false, error: "Unknown generation failure." };
 }
 
-async function runJobs({ client, jobs, outputDir, logPath }) {
+async function runJobs({ client, jobs, outputDir, logPath, phase }) {
   let nextIndex = 0;
   let active = 0;
-  let stopRequested = false;
-  let failed = false;
+  const failedJobs = [];
 
   return new Promise((resolve) => {
-    const maybeLaunch = () => {
-      if (stopRequested) {
-        if (active === 0) resolve({ failed });
-        return;
+    const finishIfDone = () => {
+      if (nextIndex >= jobs.length && active === 0) {
+        resolve({ failedJobs });
       }
-
-      while (active < MAX_CONCURRENT_REQUESTS && nextIndex < jobs.length && !stopRequested) {
-        const job = jobs[nextIndex];
-        nextIndex += 1;
-        active += 1;
-
-        const outputPath = path.join(outputDir, job.outputName);
-        const startedAt = new Date().toISOString();
-        generateOne({ client, job, outputPath })
-          .then((result) => {
-            writeJsonl(logPath, {
-              time: new Date().toISOString(),
-              startedAt,
-              id: job.id,
-              mediaType: job.mediaType,
-              outputPath,
-              ok: result.ok,
-              error: result.error || null,
-              prompt: job.prompt,
-            });
-
-            if (!result.ok) {
-              failed = true;
-              stopRequested = true;
-              console.error(`[stop] generation failed for shot_${String(job.id).padStart(3, "0")}; stopping new launches for manual prompt fix.`);
-            }
-          })
-          .catch((error) => {
-            failed = true;
-            stopRequested = true;
-            const message = describeError(error);
-            writeJsonl(logPath, {
-              time: new Date().toISOString(),
-              startedAt,
-              id: job.id,
-              mediaType: job.mediaType,
-              outputPath,
-              ok: false,
-              error: message,
-              prompt: job.prompt,
-            });
-            console.error(`[stop] generation crashed for shot_${String(job.id).padStart(3, "0")}: ${message}`);
-          })
-          .finally(() => {
-            active -= 1;
-            if ((stopRequested || nextIndex >= jobs.length) && active === 0) {
-              resolve({ failed });
-            }
-          });
-
-        if (active >= MAX_CONCURRENT_REQUESTS || nextIndex >= jobs.length) break;
-        setTimeout(maybeLaunch, REQUEST_START_INTERVAL_MS);
-        return;
-      }
-
-      if (nextIndex >= jobs.length && active === 0) resolve({ failed });
     };
 
-    maybeLaunch();
+    const launchNext = () => {
+      if (nextIndex >= jobs.length) {
+        finishIfDone();
+        return;
+      }
+
+      if (active >= MAX_CONCURRENT_REQUESTS) {
+        setTimeout(launchNext, REQUEST_START_INTERVAL_MS);
+        return;
+      }
+
+      const job = jobs[nextIndex];
+      nextIndex += 1;
+      active += 1;
+
+      const outputPath = path.join(outputDir, job.outputName);
+      const startedAt = new Date().toISOString();
+      generateOne({ client, job, outputPath })
+        .then((result) => {
+          writeJsonl(logPath, {
+            time: new Date().toISOString(),
+            startedAt,
+            phase,
+            id: job.id,
+            mediaType: job.mediaType,
+            outputPath,
+            ok: result.ok,
+            fatal: Boolean(result.fatal),
+            error: result.error || null,
+            prompt: job.prompt,
+          });
+
+          if (!result.ok) {
+            failedJobs.push({
+              job,
+              error: result.error || "Unknown generation failure.",
+              fatal: Boolean(result.fatal),
+              phase,
+            });
+            console.error(`[${phase}] generation failed for shot_${String(job.id).padStart(3, "0")}; recording failure and continuing the batch.`);
+          }
+        })
+        .catch((error) => {
+          const message = describeError(error);
+          failedJobs.push({ job, error: message, fatal: false, phase });
+          writeJsonl(logPath, {
+            time: new Date().toISOString(),
+            startedAt,
+            phase,
+            id: job.id,
+            mediaType: job.mediaType,
+            outputPath,
+            ok: false,
+            fatal: false,
+            error: message,
+            prompt: job.prompt,
+          });
+          console.error(`[${phase}] generation crashed for shot_${String(job.id).padStart(3, "0")}; recording failure and continuing the batch: ${message}`);
+        })
+        .finally(() => {
+          active -= 1;
+          finishIfDone();
+        });
+
+      if (nextIndex < jobs.length) {
+        setTimeout(launchNext, REQUEST_START_INTERVAL_MS);
+      } else {
+        finishIfDone();
+      }
+    };
+
+    if (jobs.length === 0) {
+      resolve({ failedJobs });
+      return;
+    }
+    launchNext();
   });
+}
+
+function writeFailureManifest(outputDir, failedJobs, roundsAttempted) {
+  const manifestPath = path.join(outputDir, "failed-images.json");
+  const manifest = {
+    generatedAt: new Date().toISOString(),
+    roundsAttempted,
+    failures: failedJobs.map(({ job, error, fatal, phase }) => ({
+      id: job.id,
+      mediaType: job.mediaType,
+      outputName: job.outputName,
+      outputPath: path.join(outputDir, job.outputName),
+      prompt: job.prompt,
+      error,
+      fatal,
+      lastPhase: phase,
+    })),
+  };
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  return manifestPath;
 }
 
 async function main() {
@@ -292,11 +330,54 @@ async function main() {
 
   const client = new OpenAI({ apiKey });
   const logPath = path.join(args.output, "api-run-log.jsonl");
-  const result = await runJobs({ client, jobs, outputDir: args.output, logPath });
-  if (result.failed) {
+  let result = await runJobs({
+    client,
+    jobs,
+    outputDir: args.output,
+    logPath,
+    phase: "initial",
+  });
+  let failedJobs = result.failedJobs;
+
+  console.log(`[summary] initial pass complete: failed=${failedJobs.length}`);
+
+  if (failedJobs.some((entry) => entry.fatal)) {
+    const manifestPath = writeFailureManifest(args.output, failedJobs, 0);
+    console.error(`[pause] fatal API configuration error; fix credentials or billing before continuing. See ${manifestPath}`);
     process.exitCode = 1;
     return;
   }
+
+  for (let round = 1; round <= POST_PASS_RETRY_ROUNDS && failedJobs.length > 0; round += 1) {
+    console.log(`[retry-round] ${round}/${POST_PASS_RETRY_ROUNDS} failed_images=${failedJobs.length}`);
+    result = await runJobs({
+      client,
+      jobs: failedJobs.map((entry) => entry.job),
+      outputDir: args.output,
+      logPath,
+      phase: `retry-${round}`,
+    });
+    failedJobs = result.failedJobs;
+
+    if (failedJobs.some((entry) => entry.fatal)) {
+      const manifestPath = writeFailureManifest(args.output, failedJobs, round);
+      console.error(`[pause] fatal API configuration error during retry; see ${manifestPath}`);
+      process.exitCode = 1;
+      return;
+    }
+  }
+
+  if (failedJobs.length > 0) {
+    const manifestPath = writeFailureManifest(args.output, failedJobs, POST_PASS_RETRY_ROUNDS);
+    const ids = failedJobs.map((entry) => `shot_${String(entry.job.id).padStart(3, "0")}`).join(", ");
+    console.error(`[pause] ${failedJobs.length} image(s) still failed after ${POST_PASS_RETRY_ROUNDS} retry rounds: ${ids}`);
+    console.error(`[pause] Fix the prompts or API issue, then rerun the same workflow. See ${manifestPath}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const failureManifestPath = path.join(args.output, "failed-images.json");
+  if (fs.existsSync(failureManifestPath)) fs.unlinkSync(failureManifestPath);
   console.log("[summary] all selected images completed");
 }
 

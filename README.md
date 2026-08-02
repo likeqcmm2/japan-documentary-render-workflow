@@ -254,6 +254,13 @@ node scripts/generate_images_from_shot_json.js \
   --output /workspace/japan_project/generated_images
 ```
 
+Image generation is deliberately fault-tolerant:
+
+- The first pass launches every selected image job. A failed prompt is written to `generated_images/api-run-log.jsonl`, and the batch continues instead of stopping at the first error.
+- Each request still has its normal transient-error retries. After the first pass, only the failed images are retried in **3 complete retry rounds**. Images that succeed are removed from the retry list.
+- If any image is still failing after all 3 rounds, the command exits non-zero and writes `generated_images/failed-images.json`. The full pipeline stops before LTX, validation, rendering, or upload so the prompts can be inspected safely.
+- Fix the prompt or API issue and rerun the same command. Existing successful `shot_###.png` files are skipped, so only missing images are attempted again.
+
 3. Runs LTX for `media_type: video` only:
 
 ```bash
@@ -378,6 +385,7 @@ Codex should keep polling and reporting progress. Do not kill the process unless
 The scripts are intentionally resumable:
 
 - Image generation skips existing `generated_images/shot_###.png` unless `--force` is passed.
+- Image generation records failures, completes the first pass, retries only failed images for 3 rounds, and pauses the workflow with `failed-images.json` if any remain unsuccessful.
 - LTX skips existing `ltx_videos/shot_###.mp4`.
 - Final render skips existing `clips_final_hardsub/clip_###.mp4`.
 
