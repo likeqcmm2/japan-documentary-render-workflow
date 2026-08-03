@@ -90,7 +90,7 @@ Field behavior:
 - `media_type: "video"`: first generate image, then run LTX I2V using `edit.motion_prompt`.
 - `shot`: base prompt for GPT Image.
 - `on_screen_text_ja`: appended to `shot` when generating the still image. It is **not** overlaid by FFmpeg.
-- `edit.text_overlay_ja`: rendered by FFmpeg/Pillow as an archival-paper plate in upper-left with Yuji Boku font and typing effect.
+- `edit.text_overlay_ja`: rendered by FFmpeg/Pillow as a compact archival-paper plate in upper-left with Yuji Boku font and typing effect. The complete plate treatment (canvas, text, padding, border, and shadow) is scaled to 70% of the original production size; change `ARCHIVAL_OVERLAY_SCALE` in `scripts/render_final_video.py` only if a different global size is needed.
 - `edit.hardsub: "normal"`: burn SRT subtitles only inside this shot.
 - `edit.hardsub: null`: do not burn SRT subtitles inside this shot.
 - `edit.kenburns_type: "none"` or `"static_hold"`: no animated Ken Burns movement.
@@ -528,7 +528,7 @@ The final production style includes:
 - If a new Vast template reports `h264_nvenc` / `OpenEncodeSessionEx failed` / `unsupported device`, `render_final_video.py` automatically retries that FFmpeg command with `libx264`.
 - Photo Ken Burns uses high-resolution intermediate scaling (`scale=8000`) before `zoompan` to avoid jerky motion.
 - Real grain asset from `assets/grain.mp4`, not synthetic FFmpeg noise.
-- `text_overlay_ja`: upper-left archival-paper plate, Yuji Boku font, typing animation, typing sound trimmed to the typing duration.
+- `text_overlay_ja`: upper-left archival-paper plate at 70% scale, Yuji Boku font, typing animation, typing sound trimmed to the typing duration. This setting does not affect YouTube-style SRT subtitles.
 - SRT hardsub: YouTube-style small subtitle at bottom, only for shots with `edit.hardsub: "normal"`.
 
 ## Final QA Checklist

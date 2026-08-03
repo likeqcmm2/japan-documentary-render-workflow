@@ -45,6 +45,7 @@ TYPE_SFX = PROJECT / "assets" / "keyboard-typing-sound-effect-335503.mp3"
 VOICE = Path(args.voice)
 SRT = Path(args.srt)
 GRAIN_OPACITY = {"light": 0.055, "medium": 0.095, "heavy": 0.14}
+ARCHIVAL_OVERLAY_SCALE = 0.70
 
 
 def x264_fallback(cmd):
@@ -195,16 +196,20 @@ def create_typing_overlay(item, clip_duration):
         return None, 0.0
 
     sid = int(item["id"])
-    output = OVERLAY_DIR / f"typing_{sid:03d}.mov"
+    scale_tag = int(round(ARCHIVAL_OVERLAY_SCALE * 100))
+    output = OVERLAY_DIR / f"typing_{sid:03d}_s{scale_tag}.mov"
     typing_duration = min(3.5, max(0.8, len(text.replace("\n", "")) * 0.08))
     total_frames = max(1, int(math.ceil(clip_duration * FPS)))
     if output.exists() and output.stat().st_size > 1000:
         return output, typing_duration
 
-    ow, oh = 1160, 320
+    # Keep the archival plate compact enough to support the imagery. Scale the
+    # whole treatment together so text, padding, border, and shadow stay balanced.
+    s = ARCHIVAL_OVERLAY_SCALE
+    ow, oh = round(1160 * s), round(320 * s)
     font_path = YUJI_BOKU_FONT_FILE if Path(YUJI_BOKU_FONT_FILE).exists() else BOLD_FONT_FILE
-    font = ImageFont.truetype(font_path, 46)
-    line_spacing = 12
+    font = ImageFont.truetype(font_path, round(46 * s))
+    line_spacing = round(12 * s)
     visible_chars = list(text)
 
     cmd = [
@@ -229,18 +234,21 @@ def create_typing_overlay(item, clip_duration):
                 bbox = draw.multiline_textbbox((0, 0), shown, font=font, spacing=line_spacing)
                 text_w = bbox[2] - bbox[0]
                 text_h = bbox[3] - bbox[1]
-                pad_x, pad_y = 54, 34
-                plate_w = min(ow - 70, max(260, text_w + pad_x * 2))
-                plate_h = min(oh - 70, max(100, text_h + pad_y * 2))
-                px0, py0 = 28, 28
+                pad_x, pad_y = round(54 * s), round(34 * s)
+                outer_margin = round(70 * s)
+                plate_w = min(ow - outer_margin, max(round(260 * s), text_w + pad_x * 2))
+                plate_h = min(oh - outer_margin, max(round(100 * s), text_h + pad_y * 2))
+                px0, py0 = round(28 * s), round(28 * s)
                 shadow = Image.new("RGBA", (ow, oh), (0, 0, 0, 0))
                 sd = ImageDraw.Draw(shadow)
-                sd.rounded_rectangle((px0 + 8, py0 + 8, px0 + plate_w + 8, py0 + plate_h + 8), radius=5, fill=(0, 0, 0, 95))
-                img.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(9)))
+                shadow_offset = round(8 * s)
+                sd.rounded_rectangle((px0 + shadow_offset, py0 + shadow_offset, px0 + plate_w + shadow_offset, py0 + plate_h + shadow_offset), radius=round(5 * s), fill=(0, 0, 0, 95))
+                img.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(round(9 * s))))
                 plate = paper_texture(int(plate_w), int(plate_h), sid + frame)
                 pd = ImageDraw.Draw(plate)
-                pd.rounded_rectangle((0, 0, plate_w - 1, plate_h - 1), radius=4, outline=(91, 63, 35, 235), width=3)
-                pd.rounded_rectangle((10, 10, plate_w - 11, plate_h - 11), radius=2, outline=(122, 84, 46, 170), width=1)
+                pd.rounded_rectangle((0, 0, plate_w - 1, plate_h - 1), radius=round(4 * s), outline=(91, 63, 35, 235), width=max(1, round(3 * s)))
+                inner = round(10 * s)
+                pd.rounded_rectangle((inner, inner, plate_w - inner - 1, plate_h - inner - 1), radius=round(2 * s), outline=(122, 84, 46, 170), width=1)
                 img.alpha_composite(plate, (px0, py0))
                 draw = ImageDraw.Draw(img)
                 tx = px0 + (plate_w - text_w) / 2 - bbox[0]
