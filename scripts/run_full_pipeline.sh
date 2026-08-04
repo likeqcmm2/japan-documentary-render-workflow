@@ -26,7 +26,7 @@ PY
 )"
 SRT_IN="$PROJECT/inputs/subtitles.srt"
 RENDER_MODE="${RENDER_MODE:-optimized}"
-RENDER_WORKERS="${RENDER_WORKERS:-3}"
+RENDER_WORKERS="${RENDER_WORKERS:-6}"
 
 (cd "$REPO_DIR" && node scripts/generate_images_from_shot_json.js --input "$PROJECT/inputs/shot_list.json" --output "$PROJECT/generated_images")
 

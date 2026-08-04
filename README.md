@@ -11,7 +11,7 @@ This repo packages the exact pipeline used for the production render:
 5. Concatenate all clips, mux voice-over, verify duration, upload to Google Drive with rclone.
 
 The render stage defaults to the optimized renderer: hardsubs are burned during the
-main clip encode, static-hold photos use a direct centered crop, and two clips render
+main clip encode, static-hold photos use a direct centered crop, and six clips render
 concurrently. The encoder settings remain `h264_nvenc`, `CQ 20`, `1920x1080`, and
 `25 fps`. The optimized renderer keeps separate resumable caches under
 `<project>/render_optimized`.
@@ -23,11 +23,14 @@ The repo is intended for a future Codex session: clone it on a new Vast ComfyUI 
 `scripts/run_full_pipeline.sh` uses optimized rendering by default:
 
 ```bash
-RENDER_MODE=optimized RENDER_WORKERS=3 bash scripts/run_full_pipeline.sh shot.json voice.wav subtitles.srt
+RENDER_MODE=optimized RENDER_WORKERS=6 bash scripts/run_full_pipeline.sh shot.json voice.wav subtitles.srt
 ```
 
-`RENDER_WORKERS=3` is the tested default for the 64-core/128-thread RTX 5090 setup. Increase only after a
-short benchmark; too many workers can make NVENC sessions and CPU filters compete.
+`RENDER_WORKERS=6` is the tested default for the 64-core/128-thread RTX 5090 setup. The optimized renderer
+caps the value at 6. This setting completed the 206-shot Edo render in 7m 54.6s with no FFmpeg errors,
+which was 44.66% faster than the same optimized render with 3 workers and 76.46% faster than the legacy
+render. More workers are intentionally not enabled by default because NVENC sessions, CPU filters, and disk
+I/O can compete and reduce reliability.
 For a legacy comparison or emergency fallback, run:
 
 ```bash
@@ -41,7 +44,9 @@ between 0.9887 and 0.9974. The typing sound remains mixed per clip intentionally
 moving it to a global timeline is not enabled because it could change shot sync.
 
 A 30-shot concurrency benchmark on the same instance took 98.977s with 2 workers
-and 77.044s with 3 workers, a further 22.16% improvement, with no FFmpeg errors.
+and 77.044s with 3 workers, a 22.16% improvement, with no FFmpeg errors. The full
+6-worker production render was then validated separately before making 6 workers the
+default.
 
 ## Important Security Rule
 

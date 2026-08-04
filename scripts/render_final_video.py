@@ -22,7 +22,7 @@ def parse_args():
     parser.add_argument("--height", type=int, default=1080)
     parser.add_argument("--fps", type=int, default=25)
     parser.add_argument("--optimized", action="store_true", help="Use one-pass subtitles, static-hold fast path, and bounded parallel rendering.")
-    parser.add_argument("--workers", type=int, default=2, help="Concurrent optimized clip renders (default: 2).")
+    parser.add_argument("--workers", type=int, default=6, help="Concurrent optimized clip renders (default: 6).")
     parser.add_argument("--render-root", default=None, help="Optional directory for optimized render caches and intermediate files.")
     return parser.parse_args()
 
@@ -605,7 +605,7 @@ def render_clip_optimized(item):
 
 
 if args.optimized:
-    workers = max(1, min(int(args.workers), 4))
+    workers = max(1, min(int(args.workers), 6))
     print(f"[optimized] workers={workers} render_root={RENDER_ROOT}", flush=True)
     with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = [executor.submit(render_clip, item) for item in ITEMS]
