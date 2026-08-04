@@ -1,5 +1,6 @@
 import json
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import math
 import re
 import shutil
@@ -20,6 +21,9 @@ def parse_args():
     parser.add_argument("--width", type=int, default=1920)
     parser.add_argument("--height", type=int, default=1080)
     parser.add_argument("--fps", type=int, default=25)
+    parser.add_argument("--optimized", action="store_true", help="Use one-pass subtitles, static-hold fast path, and bounded parallel rendering.")
+    parser.add_argument("--workers", type=int, default=2, help="Concurrent optimized clip renders (default: 2).")
+    parser.add_argument("--render-root", default=None, help="Optional directory for optimized render caches and intermediate files.")
     return parser.parse_args()
 
 args = parse_args()
@@ -28,13 +32,14 @@ INPUT_JSON = Path(args.input_json) if args.input_json else PROJECT / "inputs" / 
 IMAGES_DIR = Path(args.images_dir) if args.images_dir else PROJECT / "generated_images"
 LTX_DIR = Path(args.ltx_dir) if args.ltx_dir else PROJECT / "ltx_videos"
 ITEMS = json.loads(INPUT_JSON.read_text())
-CLIP_DIR = PROJECT / "clips_final_hardsub"
-BASE_CLIP_DIR = PROJECT / "clips_final_base"
+RENDER_ROOT = Path(args.render_root) if args.render_root else PROJECT
+CLIP_DIR = RENDER_ROOT / "clips_final_hardsub"
+BASE_CLIP_DIR = RENDER_ROOT / "clips_final_base"
 FINAL_DIR = PROJECT / "final"
-OVERLAY_DIR = PROJECT / "typing_overlays_final_archival"
-TMP_DIR = PROJECT / "tmp_final_hardsub"
+OVERLAY_DIR = RENDER_ROOT / "typing_overlays_final_archival"
+TMP_DIR = RENDER_ROOT / "tmp_final_hardsub"
 for folder in (CLIP_DIR, BASE_CLIP_DIR, FINAL_DIR, OVERLAY_DIR, TMP_DIR):
-    folder.mkdir(exist_ok=True)
+    folder.mkdir(parents=True, exist_ok=True)
 
 W, H, FPS = args.width, args.height, args.fps
 FONT_FILE = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
@@ -148,6 +153,16 @@ def video_filter():
         f"[0:v]fps={FPS},scale={W}:{H}:force_original_aspect_ratio=decrease,"
         f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:black,"
         "setsar=1,format=yuv420p,setpts=PTS-STARTPTS[v0]"
+    )
+
+
+def static_photo_filter():
+    # Match the old centered 16:9 crop without paying for 8000px zoompan frames.
+    return (
+        f"[0:v]scale={W}:{H}:force_original_aspect_ratio=increase,"
+        f"crop={W}:{H},setsar=1,format=yuv420p,"
+        "tpad=stop_mode=clone:stop_duration=__DURATION__,"
+        "trim=duration=__DURATION__,setpts=PTS-STARTPTS[v0]"
     )
 
 
@@ -346,6 +361,9 @@ def render_clip(item):
         print(f"[skip] {output.name}", flush=True)
         return
 
+    if args.optimized:
+        return render_clip_optimized(item)
+
     d = duration(item)
     frames = max(1, int(round(d * FPS)))
     src = source_path(item)
@@ -474,13 +492,133 @@ def render_clip(item):
         shutil.copy2(base_output, output)
 
 
-for item in ITEMS:
-    render_clip(item)
+def render_clip_optimized(item):
+    output = clip_path(item)
+    if output.exists() and output.stat().st_size > 100000:
+        print(f"[skip] {output.name}", flush=True)
+        return
+
+    d = duration(item)
+    frames = max(1, int(round(d * FPS)))
+    src = source_path(item)
+    if not src.exists():
+        raise FileNotFoundError(src)
+
+    media = (item.get("media_type") or "").lower()
+    edit = item.get("edit") or {}
+    grain = edit.get("film_grain") or "none"
+    typing_overlay, typing_duration = create_typing_overlay(item, d)
+    typing = typing_overlay is not None
+    local_srt = write_local_srt(item)
+
+    cmd = ["ffmpeg", "-hide_banner", "-y"]
+    if media == "video":
+        cmd += ["-stream_loop", "-1", "-i", str(src)]
+    elif (edit.get("kenburns_type") or "static_hold") in ("none", "static_hold"):
+        # A single decoded frame is padded after scaling by tpad in the filter graph.
+        cmd += ["-i", str(src)]
+    else:
+        cmd += ["-loop", "1", "-i", str(src)]
+
+    input_count = 1
+    grain_idx = None
+    if grain != "none" and GRAIN.exists():
+        grain_idx = input_count
+        input_count += 1
+        cmd += ["-stream_loop", "-1", "-i", str(GRAIN)]
+
+    overlay_idx = None
+    if typing_overlay:
+        overlay_idx = input_count
+        input_count += 1
+        cmd += ["-i", str(typing_overlay)]
+
+    type_idx = None
+    if typing and TYPE_SFX.exists():
+        type_idx = input_count
+        input_count += 1
+        cmd += ["-stream_loop", "-1", "-i", str(TYPE_SFX)]
+
+    silent_idx = input_count
+    cmd += ["-f", "lavfi", "-t", f"{d:.3f}", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000"]
+
+    kb = (edit.get("kenburns_type") or "static_hold")
+    if media == "photo" and kb in ("none", "static_hold"):
+        filters = [static_photo_filter().replace("__DURATION__", f"{d:.3f}")]
+    else:
+        filters = [video_filter() if media == "video" else photo_filter(item, frames)]
+    current = "v0"
+
+    if grain_idx is not None:
+        opacity = GRAIN_OPACITY.get(grain, 0.095)
+        filters.append(
+            f"[{grain_idx}:v]fps={FPS},scale={W}:{H}:force_original_aspect_ratio=increase,"
+            f"crop={W}:{H},trim=duration={d:.3f},setpts=PTS-STARTPTS[g]"
+        )
+        filters.append(f"[{current}][g]blend=all_mode=screen:all_opacity={opacity}[vgrain]")
+        current = "vgrain"
+
+    if edit.get("vignette"):
+        filters.append(f"[{current}]vignette=PI/5[vvig]")
+        current = "vvig"
+
+    if overlay_idx is not None:
+        filters.append(f"[{overlay_idx}:v]fps={FPS},format=rgba,setpts=PTS-STARTPTS[tov]")
+        filters.append(f"[{current}][tov]overlay=80:90:eof_action=pass[vtyped]")
+        current = "vtyped"
+
+    # Burn subtitles in the same encode as the visual treatment.
+    if local_srt:
+        filters.append(
+            f"[{current}]subtitles='{esc_path(local_srt)}':fontsdir='/usr/share/fonts/opentype/noto':"
+            f"force_style={SUBTITLE_STYLE}[vsub]"
+        )
+        current = "vsub"
+
+    filters.append(f"[{current}]trim=duration={d:.3f},setpts=PTS-STARTPTS[vout]")
+
+    if type_idx is not None:
+        filters.append(f"[{silent_idx}:a]atrim=0:{d:.3f},asetpts=PTS-STARTPTS[sa]")
+        filters.append(
+            f"[{type_idx}:a]atrim=0:{typing_duration:.3f},asetpts=PTS-STARTPTS,volume=0.35[ta]"
+        )
+        filters.append("[sa][ta]amix=inputs=2:duration=first:dropout_transition=0[aout]")
+    else:
+        filters.append(f"[{silent_idx}:a]atrim=0:{d:.3f},asetpts=PTS-STARTPTS[aout]")
+
+    cmd += [
+        "-filter_complex", ";".join(filters),
+        "-map", "[vout]", "-map", "[aout]", "-t", f"{d:.3f}",
+        "-c:v", "h264_nvenc", "-preset", "p4", "-cq", "20",
+        "-pix_fmt", "yuv420p", "-r", str(FPS),
+        "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
+        str(output),
+    ]
+    print(
+        f"[render-optimized] clip_{int(item['id']):03d} {media} {d:.3f}s grain={grain} typing={typing} hardsub={(item.get('edit') or {}).get('hardsub')}",
+        flush=True,
+    )
+    result = run_ffmpeg(cmd, f"optimized_clip_{int(item['id']):03d}")
+    if result.returncode != 0:
+        print(result.stdout[-4000:], flush=True)
+        raise RuntimeError(f"optimized ffmpeg failed for clip_{int(item['id']):03d}")
+
+
+if args.optimized:
+    workers = max(1, min(int(args.workers), 4))
+    print(f"[optimized] workers={workers} render_root={RENDER_ROOT}", flush=True)
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = [executor.submit(render_clip, item) for item in ITEMS]
+        for future in futures:
+            future.result()
+else:
+    for item in ITEMS:
+        render_clip(item)
 
 concat = TMP_DIR / "concat_list_final.txt"
 concat.write_text("".join(f"file '{clip_path(item)}'\n" for item in ITEMS), encoding="utf-8")
 
-visual = FINAL_DIR / "japan_project_visual_timeline_final_hardsub.mp4"
+visual = RENDER_ROOT / "japan_project_visual_timeline_final_hardsub.mp4"
 cmd = [
     "ffmpeg",
     "-hide_banner",

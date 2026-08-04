@@ -25,6 +25,8 @@ print(Path(sys.argv[1]).suffix)
 PY
 )"
 SRT_IN="$PROJECT/inputs/subtitles.srt"
+RENDER_MODE="${RENDER_MODE:-optimized}"
+RENDER_WORKERS="${RENDER_WORKERS:-2}"
 
 (cd "$REPO_DIR" && node scripts/generate_images_from_shot_json.js --input "$PROJECT/inputs/shot_list.json" --output "$PROJECT/generated_images")
 
@@ -43,13 +45,29 @@ python3 "$REPO_DIR/scripts/validate_project.py" \
   --images-dir "$PROJECT/generated_images" \
   --ltx-dir "$PROJECT/ltx_videos"
 
-python3 "$REPO_DIR/scripts/render_final_video.py" \
-  --project "$PROJECT" \
-  --input-json "$PROJECT/inputs/shot_list.json" \
-  --images-dir "$PROJECT/generated_images" \
-  --ltx-dir "$PROJECT/ltx_videos" \
-  --voice "$VOICE_IN" \
-  --srt "$SRT_IN" \
-  --output "$PROJECT/final/final_video.mp4"
+if [ "$RENDER_MODE" = "legacy" ]; then
+  echo "[render] mode=legacy"
+  python3 "$REPO_DIR/scripts/render_final_video.py" \
+    --project "$PROJECT" \
+    --input-json "$PROJECT/inputs/shot_list.json" \
+    --images-dir "$PROJECT/generated_images" \
+    --ltx-dir "$PROJECT/ltx_videos" \
+    --voice "$VOICE_IN" \
+    --srt "$SRT_IN" \
+    --output "$PROJECT/final/final_video.mp4"
+else
+  echo "[render] mode=optimized workers=$RENDER_WORKERS"
+  python3 "$REPO_DIR/scripts/render_final_video.py" \
+    --optimized \
+    --workers "$RENDER_WORKERS" \
+    --render-root "$PROJECT/render_optimized" \
+    --project "$PROJECT" \
+    --input-json "$PROJECT/inputs/shot_list.json" \
+    --images-dir "$PROJECT/generated_images" \
+    --ltx-dir "$PROJECT/ltx_videos" \
+    --voice "$VOICE_IN" \
+    --srt "$SRT_IN" \
+    --output "$PROJECT/final/final_video.mp4"
+fi
 
 echo "[done] $PROJECT/final/final_video.mp4"

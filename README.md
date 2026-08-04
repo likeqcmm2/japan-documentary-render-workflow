@@ -10,7 +10,35 @@ This repo packages the exact pipeline used for the production render:
 4. Apply per-shot Ken Burns, grain, vignette, typing overlays, typing sound, and selective hard subtitles.
 5. Concatenate all clips, mux voice-over, verify duration, upload to Google Drive with rclone.
 
+The render stage defaults to the optimized renderer: hardsubs are burned during the
+main clip encode, static-hold photos use a direct centered crop, and two clips render
+concurrently. The encoder settings remain `h264_nvenc`, `CQ 20`, `1920x1080`, and
+`25 fps`. The optimized renderer keeps separate resumable caches under
+`<project>/render_optimized`.
+
 The repo is intended for a future Codex session: clone it on a new Vast ComfyUI server, provide the input JSON/audio/SRT and local secrets, then run the workflow to produce a Drive link.
+
+## Render Speed And Fallback
+
+`scripts/run_full_pipeline.sh` uses optimized rendering by default:
+
+```bash
+RENDER_MODE=optimized RENDER_WORKERS=2 bash scripts/run_full_pipeline.sh shot.json voice.wav subtitles.srt
+```
+
+`RENDER_WORKERS=2` is the safe default for the RTX 5090 setup. Increase only after a
+short benchmark; too many workers can make NVENC sessions and CPU filters compete.
+For a legacy comparison or emergency fallback, run:
+
+```bash
+RENDER_MODE=legacy bash scripts/run_full_pipeline.sh shot.json voice.wav subtitles.srt
+```
+
+On the Edo benchmark with 206 shots, the legacy render took 33m 36.6s and the
+optimized render took 14m 17.6s: 57.47% less wall time (2.35x faster). Both outputs
+were 1920x1080, 25 fps, and 1519.041s long. Six sampled frame comparisons had SSIM
+between 0.9887 and 0.9974. The typing sound remains mixed per clip intentionally;
+moving it to a global timeline is not enabled because it could change shot sync.
 
 ## Important Security Rule
 
