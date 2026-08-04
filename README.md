@@ -23,10 +23,10 @@ The repo is intended for a future Codex session: clone it on a new Vast ComfyUI 
 `scripts/run_full_pipeline.sh` uses optimized rendering by default:
 
 ```bash
-RENDER_MODE=optimized RENDER_WORKERS=2 bash scripts/run_full_pipeline.sh shot.json voice.wav subtitles.srt
+RENDER_MODE=optimized RENDER_WORKERS=3 bash scripts/run_full_pipeline.sh shot.json voice.wav subtitles.srt
 ```
 
-`RENDER_WORKERS=2` is the safe default for the RTX 5090 setup. Increase only after a
+`RENDER_WORKERS=3` is the tested default for the 64-core/128-thread RTX 5090 setup. Increase only after a
 short benchmark; too many workers can make NVENC sessions and CPU filters compete.
 For a legacy comparison or emergency fallback, run:
 
@@ -39,6 +39,9 @@ optimized render took 14m 17.6s: 57.47% less wall time (2.35x faster). Both outp
 were 1920x1080, 25 fps, and 1519.041s long. Six sampled frame comparisons had SSIM
 between 0.9887 and 0.9974. The typing sound remains mixed per clip intentionally;
 moving it to a global timeline is not enabled because it could change shot sync.
+
+A 30-shot concurrency benchmark on the same instance took 98.977s with 2 workers
+and 77.044s with 3 workers, a further 22.16% improvement, with no FFmpeg errors.
 
 ## Important Security Rule
 
