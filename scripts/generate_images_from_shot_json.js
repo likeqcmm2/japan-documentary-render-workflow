@@ -139,22 +139,29 @@ function normalizeItems(data) {
   return data.segments || data.shots || data.items || [];
 }
 
-function outputNameForId(id) {
-  return `shot_${String(id).padStart(3, "0")}.png`;
+function shotLabel(runtimeId) {
+  return `shot_${String(runtimeId).padStart(3, "0")}`;
+}
+
+function outputNameForRuntimeId(runtimeId) {
+  return `${shotLabel(runtimeId)}.png`;
 }
 
 function buildJobs(inputPath, outputDir) {
   const data = JSON.parse(fs.readFileSync(inputPath, "utf8"));
   return normalizeItems(data).map((item, index) => {
-    const id = item.id ?? index + 1;
+    const runtimeId = index + 1;
+    const sourceId = item.id ?? runtimeId;
     const shot = String(item.shot || "").trim();
     const onScreenText = item.on_screen_text_ja == null ? "" : String(item.on_screen_text_ja).trim();
     const prompt = onScreenText ? `${shot}${onScreenText}` : shot;
     return {
-      id,
+      id: runtimeId,
+      runtimeId,
+      sourceId,
       mediaType: item.media_type || "",
       prompt,
-      outputName: outputNameForId(id),
+      outputName: outputNameForRuntimeId(runtimeId),
       item,
     };
   }).filter((job) => job.prompt);
@@ -167,7 +174,7 @@ function writeJsonl(filePath, entry) {
 async function generateOne({ client, job, outputPath }) {
   for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt += 1) {
     try {
-      console.log(`[generate] shot_${String(job.id).padStart(3, "0")} media=${job.mediaType} attempt=${attempt}`);
+      console.log(`[generate] ${shotLabel(job.runtimeId)} source_id=${job.sourceId} media=${job.mediaType} attempt=${attempt}`);
       const result = await withTimeoutAbort(
         async (signal) => client.images.generate({
           model: MODEL,
@@ -186,7 +193,7 @@ async function generateOne({ client, job, outputPath }) {
       return { ok: true };
     } catch (error) {
       const message = describeError(error);
-      console.error(`[error] shot_${String(job.id).padStart(3, "0")} attempt=${attempt}: ${message}`);
+      console.error(`[error] ${shotLabel(job.runtimeId)} source_id=${job.sourceId} attempt=${attempt}: ${message}`);
       if (isFatalConfigError(error)) return { ok: false, fatal: true, error: message };
       if (attempt > MAX_RETRIES || !shouldRetry(error)) return { ok: false, error: message };
       const delay = RETRY_BASE_DELAY_MS * attempt;
@@ -232,7 +239,8 @@ async function runJobs({ client, jobs, outputDir, logPath, phase }) {
             time: new Date().toISOString(),
             startedAt,
             phase,
-            id: job.id,
+            id: job.sourceId,
+            runtimeId: job.runtimeId,
             mediaType: job.mediaType,
             outputPath,
             ok: result.ok,
@@ -248,7 +256,7 @@ async function runJobs({ client, jobs, outputDir, logPath, phase }) {
               fatal: Boolean(result.fatal),
               phase,
             });
-            console.error(`[${phase}] generation failed for shot_${String(job.id).padStart(3, "0")}; recording failure and continuing the batch.`);
+            console.error(`[${phase}] generation failed for ${shotLabel(job.runtimeId)} source_id=${job.sourceId}; recording failure and continuing the batch.`);
           }
         })
         .catch((error) => {
@@ -258,7 +266,8 @@ async function runJobs({ client, jobs, outputDir, logPath, phase }) {
             time: new Date().toISOString(),
             startedAt,
             phase,
-            id: job.id,
+            id: job.sourceId,
+            runtimeId: job.runtimeId,
             mediaType: job.mediaType,
             outputPath,
             ok: false,
@@ -266,7 +275,7 @@ async function runJobs({ client, jobs, outputDir, logPath, phase }) {
             error: message,
             prompt: job.prompt,
           });
-          console.error(`[${phase}] generation crashed for shot_${String(job.id).padStart(3, "0")}; recording failure and continuing the batch: ${message}`);
+          console.error(`[${phase}] generation crashed for ${shotLabel(job.runtimeId)} source_id=${job.sourceId}; recording failure and continuing the batch: ${message}`);
         })
         .finally(() => {
           active -= 1;
@@ -294,7 +303,8 @@ function writeFailureManifest(outputDir, failedJobs, roundsAttempted) {
     generatedAt: new Date().toISOString(),
     roundsAttempted,
     failures: failedJobs.map(({ job, error, fatal, phase }) => ({
-      id: job.id,
+      id: job.sourceId,
+      runtimeId: job.runtimeId,
       mediaType: job.mediaType,
       outputName: job.outputName,
       outputPath: path.join(outputDir, job.outputName),
@@ -317,8 +327,8 @@ async function main() {
 
   fs.mkdirSync(args.output, { recursive: true });
   let jobs = buildJobs(args.input, args.output);
-  if (Number.isInteger(args.startId)) jobs = jobs.filter((job) => job.id >= args.startId);
-  if (Number.isInteger(args.endId)) jobs = jobs.filter((job) => job.id <= args.endId);
+  if (Number.isInteger(args.startId)) jobs = jobs.filter((job) => job.runtimeId >= args.startId);
+  if (Number.isInteger(args.endId)) jobs = jobs.filter((job) => job.runtimeId <= args.endId);
   jobs = jobs.filter((job) => args.force || !fs.existsSync(path.join(args.output, job.outputName)));
   if (Number.isInteger(args.limit)) jobs = jobs.slice(0, args.limit);
 
@@ -369,7 +379,7 @@ async function main() {
 
   if (failedJobs.length > 0) {
     const manifestPath = writeFailureManifest(args.output, failedJobs, POST_PASS_RETRY_ROUNDS);
-    const ids = failedJobs.map((entry) => `shot_${String(entry.job.id).padStart(3, "0")}`).join(", ");
+    const ids = failedJobs.map((entry) => `${shotLabel(entry.job.runtimeId)}(source_id=${entry.job.sourceId})`).join(", ");
     console.error(`[pause] ${failedJobs.length} image(s) still failed after ${POST_PASS_RETRY_ROUNDS} retry rounds: ${ids}`);
     console.error(`[pause] Fix the prompts or API issue, then rerun the same workflow. See ${manifestPath}`);
     process.exitCode = 1;

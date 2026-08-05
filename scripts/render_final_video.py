@@ -32,6 +32,8 @@ INPUT_JSON = Path(args.input_json) if args.input_json else PROJECT / "inputs" / 
 IMAGES_DIR = Path(args.images_dir) if args.images_dir else PROJECT / "generated_images"
 LTX_DIR = Path(args.ltx_dir) if args.ltx_dir else PROJECT / "ltx_videos"
 ITEMS = json.loads(INPUT_JSON.read_text())
+for runtime_id, item in enumerate(ITEMS, 1):
+    item["_runtime_id"] = runtime_id
 RENDER_ROOT = Path(args.render_root) if args.render_root else PROJECT
 CLIP_DIR = RENDER_ROOT / "clips_final_hardsub"
 BASE_CLIP_DIR = RENDER_ROOT / "clips_final_base"
@@ -91,12 +93,24 @@ def duration(item):
     return max(0.04, float(item["end"]) - float(item["start"]))
 
 
+def runtime_id(item):
+    return item["_runtime_id"]
+
+
+def shot_label(item):
+    return f"shot_{runtime_id(item):03d}"
+
+
+def clip_label(item):
+    return f"clip_{runtime_id(item):03d}"
+
+
 def clip_path(item):
-    return CLIP_DIR / f"clip_{int(item['id']):03d}.mp4"
+    return CLIP_DIR / f"{clip_label(item)}.mp4"
 
 
 def source_path(item):
-    sid = int(item["id"])
+    sid = runtime_id(item)
     if (item.get("media_type") or "").lower() == "video":
         return LTX_DIR / f"shot_{sid:03d}.mp4"
     return IMAGES_DIR / f"shot_{sid:03d}.png"
@@ -171,7 +185,7 @@ def esc_path(path):
 
 
 def write_textfile(item, text, kind):
-    path = TMP_DIR / f"text_{int(item['id']):03d}_{kind}.txt"
+    path = TMP_DIR / f"text_{runtime_id(item):03d}_{kind}.txt"
     path.write_text(text, encoding="utf-8")
     return path
 
@@ -210,7 +224,7 @@ def create_typing_overlay(item, clip_duration):
     if not text:
         return None, 0.0
 
-    sid = int(item["id"])
+    sid = runtime_id(item)
     scale_tag = int(round(ARCHIVAL_OVERLAY_SCALE * 100))
     output = OVERLAY_DIR / f"typing_{sid:03d}_s{scale_tag}.mov"
     typing_duration = min(3.5, max(0.8, len(text.replace("\n", "")) * 0.08))
@@ -337,9 +351,11 @@ SUBTITLE_STYLE = (
 def write_local_srt(item):
     if (item.get("edit") or {}).get("hardsub") != "normal":
         return None
-    sid = int(item["id"])
+    sid = runtime_id(item)
     start, end = float(item["start"]), float(item["end"])
     rows = []
+    # A shot may group several source/SRT IDs, so subtitle membership is based
+    # only on timeline overlap with the shot boundaries.
     for s, e, text in SRT_ENTRIES:
         ls = max(s, start) - start
         le = min(e, end) - start
@@ -356,7 +372,7 @@ def write_local_srt(item):
 
 def render_clip(item):
     output = clip_path(item)
-    base_output = BASE_CLIP_DIR / f"clip_{int(item['id']):03d}_base.mp4"
+    base_output = BASE_CLIP_DIR / f"{clip_label(item)}_base.mp4"
     if output.exists() and output.stat().st_size > 100000:
         print(f"[skip] {output.name}", flush=True)
         return
@@ -468,13 +484,13 @@ def render_clip(item):
         str(base_output),
     ]
     print(
-        f"[render] clip_{int(item['id']):03d} {media} {d:.3f}s grain={grain} typing={typing} hardsub={(item.get('edit') or {}).get('hardsub')}",
+        f"[render] {clip_label(item)} source_id={item.get('id')} {media} {d:.3f}s grain={grain} typing={typing} hardsub={(item.get('edit') or {}).get('hardsub')}",
         flush=True,
     )
-    result = run_ffmpeg(cmd, f"clip_{int(item['id']):03d}")
+    result = run_ffmpeg(cmd, clip_label(item))
     if result.returncode != 0:
         print(result.stdout[-4000:], flush=True)
-        raise RuntimeError(f"ffmpeg failed for clip_{int(item['id']):03d}")
+        raise RuntimeError(f"ffmpeg failed for {clip_label(item)}")
 
     local_srt = write_local_srt(item)
     if local_srt:
@@ -484,10 +500,10 @@ def render_clip(item):
             "-c:v", "h264_nvenc", "-preset", "p4", "-cq", "20", "-pix_fmt", "yuv420p",
             "-r", str(FPS), "-c:a", "copy", "-movflags", "+faststart", str(output),
         ]
-        result = run_ffmpeg(sub_cmd, f"clip_{int(item['id']):03d}_subtitles")
+        result = run_ffmpeg(sub_cmd, f"{clip_label(item)}_subtitles")
         if result.returncode != 0:
             print(result.stdout[-4000:], flush=True)
-            raise RuntimeError(f"subtitle burn failed for clip_{int(item['id']):03d}")
+            raise RuntimeError(f"subtitle burn failed for {clip_label(item)}")
     else:
         shutil.copy2(base_output, output)
 
@@ -595,13 +611,13 @@ def render_clip_optimized(item):
         str(output),
     ]
     print(
-        f"[render-optimized] clip_{int(item['id']):03d} {media} {d:.3f}s grain={grain} typing={typing} hardsub={(item.get('edit') or {}).get('hardsub')}",
+        f"[render-optimized] {clip_label(item)} source_id={item.get('id')} {media} {d:.3f}s grain={grain} typing={typing} hardsub={(item.get('edit') or {}).get('hardsub')}",
         flush=True,
     )
-    result = run_ffmpeg(cmd, f"optimized_clip_{int(item['id']):03d}")
+    result = run_ffmpeg(cmd, f"optimized_{clip_label(item)}")
     if result.returncode != 0:
         print(result.stdout[-4000:], flush=True)
-        raise RuntimeError(f"optimized ffmpeg failed for clip_{int(item['id']):03d}")
+        raise RuntimeError(f"optimized ffmpeg failed for {clip_label(item)}")
 
 
 if args.optimized:

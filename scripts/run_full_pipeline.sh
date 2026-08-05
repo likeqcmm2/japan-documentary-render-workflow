@@ -8,7 +8,11 @@ SHOT_JSON="${1:?Usage: scripts/run_full_pipeline.sh shot_list.json voice.wav sub
 VOICE="${2:?Usage: scripts/run_full_pipeline.sh shot_list.json voice.wav subtitles.srt}"
 SRT="${3:?Usage: scripts/run_full_pipeline.sh shot_list.json voice.wav subtitles.srt}"
 
-mkdir -p "$PROJECT/inputs"
+mkdir -p "$PROJECT/inputs" "$PROJECT/comfy_workflows" "$PROJECT/assets"
+cp "$REPO_DIR/comfy_workflows/ltx-2.3-i2v.payload.json" "$PROJECT/comfy_workflows/ltx-2.3-i2v.payload.json"
+cp "$REPO_DIR/assets/grain.mp4" "$PROJECT/assets/grain.mp4"
+cp "$REPO_DIR/assets/keyboard-typing-sound-effect-335503.mp3" "$PROJECT/assets/keyboard-typing-sound-effect-335503.mp3"
+cp "$REPO_DIR/assets/YujiBoku-Regular.ttf" "$PROJECT/assets/YujiBoku-Regular.ttf"
 cp "$SHOT_JSON" "$PROJECT/inputs/shot_list.json"
 cp "$VOICE" "$PROJECT/inputs/voice$(python3 - <<'PY' "$VOICE"
 import sys

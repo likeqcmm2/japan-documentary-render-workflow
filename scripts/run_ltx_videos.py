@@ -36,6 +36,8 @@ INPUT_DIR.mkdir(parents=True, exist_ok=True)
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 items = json.loads(INPUT_JSON.read_text())
+for runtime_id, item in enumerate(items, 1):
+    item["_runtime_id"] = runtime_id
 video_items = [x for x in items if (x.get("media_type") or "").lower() == "video"]
 base_payload = json.loads(PAYLOAD.read_text())["input"]["workflow_json"]
 
@@ -85,7 +87,7 @@ def copy_comfy_output(filename, subfolder, shot_id):
 
 def make_prompt(item):
     w = json.loads(json.dumps(base_payload))
-    shot_id = int(item["id"])
+    shot_id = item["_runtime_id"]
     duration = int(math.ceil(float(item["end"]) - float(item["start"])))
     duration = max(1, duration)
     motion_prompt = (item.get("edit") or {}).get("motion_prompt") or item.get("shot") or "subtle documentary motion"
@@ -107,13 +109,14 @@ def make_prompt(item):
     return w, duration, motion_prompt
 
 def run_one(item):
-    shot_id = int(item["id"])
+    shot_id = item["_runtime_id"]
+    source_id = item.get("id", shot_id)
     dst = expected_output(shot_id)
     if dst.exists() and dst.stat().st_size > 100000:
-        print(f"[skip] shot_{shot_id:03d} exists {dst}", flush=True)
+        print(f"[skip] shot_{shot_id:03d} source_id={source_id} exists {dst}", flush=True)
         return True
     prompt, duration, motion_prompt = make_prompt(item)
-    print(f"[queue] shot_{shot_id:03d} duration={duration}s", flush=True)
+    print(f"[queue] shot_{shot_id:03d} source_id={source_id} duration={duration}s", flush=True)
     started = time.time()
     resp = request_json(f"{args.comfy_url}/prompt", {
         "prompt": prompt,
@@ -134,7 +137,7 @@ def run_one(item):
             dst = copy_comfy_output(fileinfo["filename"], fileinfo.get("subfolder", ""), shot_id)
             elapsed = time.time() - started
             print(f"[done] shot_{shot_id:03d} elapsed={elapsed:.1f}s -> {dst}", flush=True)
-            log({"id": shot_id, "ok": True, "duration_requested": duration, "elapsed_sec": round(elapsed, 3), "output": str(dst), "motion_prompt": motion_prompt})
+            log({"id": source_id, "runtime_id": shot_id, "ok": True, "duration_requested": duration, "elapsed_sec": round(elapsed, 3), "output": str(dst), "motion_prompt": motion_prompt})
             return True
         if int(time.time() - started) % 30 < 5:
             q = request_json(f"{args.comfy_url}/queue", timeout=60)
@@ -146,8 +149,9 @@ for item in video_items:
     try:
         run_one(item)
     except Exception as e:
-        shot_id = int(item.get("id", -1))
-        print(f"[fatal] shot_{shot_id:03d}: {e}", flush=True)
-        log({"id": shot_id, "ok": False, "error": str(e)})
+        shot_id = item["_runtime_id"]
+        source_id = item.get("id", shot_id)
+        print(f"[fatal] shot_{shot_id:03d} source_id={source_id}: {e}", flush=True)
+        log({"id": source_id, "runtime_id": shot_id, "ok": False, "error": str(e)})
         raise
 print("[summary] all LTX video shots completed", flush=True)

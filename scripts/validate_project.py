@@ -42,27 +42,25 @@ def main():
     ltx_dir = Path(args.ltx_dir) if args.ltx_dir else project / "ltx_videos"
 
     items = json.loads(input_json.read_text())
-    ids = [int(x["id"]) for x in items]
-    expected_ids = list(range(min(ids), max(ids) + 1))
-    print(f"items={len(items)} first_id={min(ids)} last_id={max(ids)}")
+    runtime_items = list(enumerate(items, 1))
+    source_ids = [x.get("id", runtime_id) for runtime_id, x in runtime_items]
+    print(f"items={len(items)} first_source_id={source_ids[0]} last_source_id={source_ids[-1]}")
     print("media", dict(Counter((x.get("media_type") or "").lower() for x in items)))
     print("edit.hardsub", dict(Counter(str((x.get("edit") or {}).get("hardsub")) for x in items)))
     print("text_overlay_count", sum(1 for x in items if (x.get("edit") or {}).get("text_overlay_ja")))
-    if ids != expected_ids:
-        missing = sorted(set(expected_ids) - set(ids))
-        print(f"WARNING non-sequential IDs. Missing IDs: {missing[:30]}")
+    if len({str(x) for x in source_ids}) != len(source_ids):
+        raise SystemExit("Duplicate source IDs in shot list")
 
     missing_images = []
     missing_ltx = []
-    for item in items:
-        sid = int(item["id"])
+    for sid, item in runtime_items:
         image_path = images_dir / f"shot_{sid:03d}.png"
         if not image_path.exists():
-            missing_images.append(sid)
+            missing_images.append({"runtime_id": sid, "source_id": item.get("id", sid)})
         if (item.get("media_type") or "").lower() == "video":
             video_path = ltx_dir / f"shot_{sid:03d}.mp4"
             if not video_path.exists() or video_path.stat().st_size < 100000:
-                missing_ltx.append(sid)
+                missing_ltx.append({"runtime_id": sid, "source_id": item.get("id", sid)})
 
     print(f"missing_images={len(missing_images)} {missing_images[:40]}")
     print(f"missing_ltx_videos={len(missing_ltx)} {missing_ltx[:40]}")

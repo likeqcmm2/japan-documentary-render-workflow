@@ -120,6 +120,30 @@ Each shot should look like this shape:
 }
 ```
 
+`id` is source metadata and may be either a single number or a comma-separated
+group of original narration/SRT IDs:
+
+```json
+{
+  "id": "101,102,103,104",
+  "start": 612.969,
+  "end": 627.184
+}
+```
+
+The workflow assigns an internal `runtime_id` from the shot's one-based position
+in the JSON array. All reusable asset names use that runtime order:
+
+```text
+generated_images/shot_001.png
+ltx_videos/shot_001.mp4
+render_optimized/clips_final_hardsub/clip_001.mp4
+```
+
+The original `id` is preserved in logs as `source_id`. Never derive asset names,
+render order, or subtitle behavior from a comma-separated source ID. JSON array
+order is the production timeline.
+
 Field behavior:
 
 - `media_type: "photo"`: use generated image directly in FFmpeg.
@@ -127,8 +151,12 @@ Field behavior:
 - `shot`: base prompt for GPT Image.
 - `on_screen_text_ja`: appended to `shot` when generating the still image. It is **not** overlaid by FFmpeg.
 - `edit.text_overlay_ja`: rendered by FFmpeg/Pillow as a compact archival-paper plate in upper-left with Yuji Boku font and typing effect. The complete plate treatment (canvas, text, padding, border, and shadow) is scaled to 70% of the original production size; change `ARCHIVAL_OVERLAY_SCALE` in `scripts/render_final_video.py` only if a different global size is needed.
-- `edit.hardsub: "normal"`: burn SRT subtitles only inside this shot.
-- `edit.hardsub: null`: do not burn SRT subtitles inside this shot.
+- `edit.hardsub: "normal"`: burn every SRT entry whose time range overlaps this
+  shot's `start -> end` range. A grouped shot may therefore contain multiple SRT
+  entries; each entry is shifted to shot-local time before FFmpeg burns it.
+- `edit.hardsub: null`: do not create a local subtitle file for this shot. This
+  suppresses every SRT entry covered by the grouped shot, regardless of how many
+  source IDs appear in `id`.
 - `edit.kenburns_type: "none"` or `"static_hold"`: no animated Ken Burns movement.
 - Video outputs from LTX are padded to `1920x1080` with black edges if the LTX workflow emits a shorter frame such as `1920x1024`.
 
@@ -281,7 +309,9 @@ scripts/run_full_pipeline.sh /path/to/shot_list.json /path/to/voice.wav /path/to
 
 This does:
 
-1. Copies input files into `/workspace/japan_project/inputs/`.
+1. Copies input files into `/workspace/japan_project/inputs/` and bootstraps the
+   packaged ComfyUI payload, grain, typing sound, and Yuji Boku font into the new
+   project directory. A fresh `PROJECT` path does not require manual asset copies.
 2. Runs OpenAI image generation:
 
 ```bash
@@ -420,7 +450,7 @@ Codex should keep polling and reporting progress. Do not kill the process unless
 
 The scripts are intentionally resumable:
 
-- Image generation skips existing `generated_images/shot_###.png` unless `--force` is passed.
+- Image generation skips existing `generated_images/shot_###.png` unless `--force` is passed. `###` is the one-based runtime position in JSON, not the source `id`.
 - Image generation records failures, completes the first pass, retries only failed images for 3 rounds, and pauses the workflow with `failed-images.json` if any remain unsuccessful.
 - LTX skips existing `ltx_videos/shot_###.mp4`.
 - Final render skips existing `clips_final_hardsub/clip_###.mp4`.
@@ -565,7 +595,7 @@ The final production style includes:
 - Photo Ken Burns uses high-resolution intermediate scaling (`scale=8000`) before `zoompan` to avoid jerky motion.
 - Real grain asset from `assets/grain.mp4`, not synthetic FFmpeg noise.
 - `text_overlay_ja`: upper-left archival-paper plate at 70% scale, Yuji Boku font, typing animation, typing sound trimmed to the typing duration. This setting does not affect YouTube-style SRT subtitles.
-- SRT hardsub: YouTube-style small subtitle at bottom, only for shots with `edit.hardsub: "normal"`.
+- SRT hardsub: YouTube-style small subtitle at bottom, only for shots with `edit.hardsub: "normal"`. Grouped shots use time overlap, so `normal` includes all covered SRT entries and `null` suppresses all of them.
 
 ## Final QA Checklist
 
