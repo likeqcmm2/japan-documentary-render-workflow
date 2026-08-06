@@ -35,7 +35,7 @@ ITEMS = json.loads(INPUT_JSON.read_text())
 for runtime_id, item in enumerate(ITEMS, 1):
     item["_runtime_id"] = runtime_id
 RENDER_ROOT = Path(args.render_root) if args.render_root else PROJECT
-CLIP_DIR = RENDER_ROOT / "clips_final_hardsub"
+CLIP_DIR = RENDER_ROOT / "clips_final_hardsub_frame_locked"
 BASE_CLIP_DIR = RENDER_ROOT / "clips_final_base"
 FINAL_DIR = PROJECT / "final"
 OVERLAY_DIR = RENDER_ROOT / "typing_overlays_final_archival"
@@ -53,6 +53,30 @@ VOICE = Path(args.voice)
 SRT = Path(args.srt)
 GRAIN_OPACITY = {"light": 0.055, "medium": 0.095, "heavy": 0.14}
 ARCHIVAL_OVERLAY_SCALE = 0.70
+
+
+def build_frame_schedule():
+    """Quantize absolute JSON boundaries once so per-shot rounding cannot drift."""
+    previous_end = None
+    for item in ITEMS:
+        start_frame = round(float(item["start"]) * FPS)
+        end_frame = round(float(item["end"]) * FPS)
+        if previous_end is None and start_frame != 0:
+            raise ValueError(f"The first shot must start at frame 0, got {start_frame}")
+        if previous_end is not None and start_frame != previous_end:
+            raise ValueError(
+                f"Non-contiguous frame boundary before runtime shot {item['_runtime_id']}: "
+                f"start_frame={start_frame}, previous_end_frame={previous_end}"
+            )
+        if end_frame <= start_frame:
+            raise ValueError(f"Shot {item['_runtime_id']} has no frames after quantization")
+        item["_start_frame"] = start_frame
+        item["_end_frame"] = end_frame
+        item["_frames"] = end_frame - start_frame
+        previous_end = end_frame
+
+
+build_frame_schedule()
 
 
 def x264_fallback(cmd):
@@ -82,6 +106,8 @@ def run_ffmpeg(cmd, label):
         "No capable devices found" in result.stdout
         or "OpenEncodeSessionEx failed" in result.stdout
         or "unsupported device" in result.stdout
+        or "Unknown encoder 'h264_nvenc'" in result.stdout
+        or "Unrecognized option 'cq'" in result.stdout
     ):
         print(f"[fallback] {label}: h264_nvenc unavailable; retrying with libx264", flush=True)
         fallback = x264_fallback(cmd)
@@ -89,8 +115,42 @@ def run_ffmpeg(cmd, label):
     return result
 
 
+def probe_video(path):
+    result = subprocess.run(
+        [
+            "ffprobe", "-v", "error", "-select_streams", "v:0",
+            "-show_entries", "stream=nb_frames,r_frame_rate",
+            "-of", "json", str(path),
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=True,
+    )
+    stream = json.loads(result.stdout)["streams"][0]
+    return int(stream["nb_frames"]), stream["r_frame_rate"]
+
+
+def valid_cached_clip(path, expected_frames):
+    if not path.exists() or path.stat().st_size <= 100000:
+        return False
+    try:
+        frames, rate = probe_video(path)
+        audio = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", str(path)],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True,
+        ).stdout.strip()
+        return frames == expected_frames and rate == f"{FPS}/1" and not audio
+    except (subprocess.SubprocessError, KeyError, ValueError, json.JSONDecodeError):
+        return False
+
+
 def duration(item):
-    return max(0.04, float(item["end"]) - float(item["start"]))
+    return item["_frames"] / FPS
+
+
+def frame_count(item):
+    return item["_frames"]
 
 
 def runtime_id(item):
@@ -226,9 +286,9 @@ def create_typing_overlay(item, clip_duration):
 
     sid = runtime_id(item)
     scale_tag = int(round(ARCHIVAL_OVERLAY_SCALE * 100))
-    output = OVERLAY_DIR / f"typing_{sid:03d}_s{scale_tag}.mov"
+    total_frames = frame_count(item)
+    output = OVERLAY_DIR / f"typing_{sid:03d}_s{scale_tag}_f{total_frames}.mov"
     typing_duration = min(3.5, max(0.8, len(text.replace("\n", "")) * 0.08))
-    total_frames = max(1, int(math.ceil(clip_duration * FPS)))
     if output.exists() and output.stat().st_size > 1000:
         return output, typing_duration
 
@@ -373,7 +433,7 @@ def write_local_srt(item):
 def render_clip(item):
     output = clip_path(item)
     base_output = BASE_CLIP_DIR / f"{clip_label(item)}_base.mp4"
-    if output.exists() and output.stat().st_size > 100000:
+    if valid_cached_clip(output, frame_count(item)):
         print(f"[skip] {output.name}", flush=True)
         return
 
@@ -381,7 +441,7 @@ def render_clip(item):
         return render_clip_optimized(item)
 
     d = duration(item)
-    frames = max(1, int(round(d * FPS)))
+    frames = frame_count(item)
     src = source_path(item)
     if not src.exists():
         raise FileNotFoundError(src)
@@ -411,15 +471,6 @@ def render_clip(item):
         input_count += 1
         cmd += ["-i", str(typing_overlay)]
 
-    type_idx = None
-    if typing and TYPE_SFX.exists():
-        type_idx = input_count
-        input_count += 1
-        cmd += ["-stream_loop", "-1", "-i", str(TYPE_SFX)]
-
-    silent_idx = input_count
-    cmd += ["-f", "lavfi", "-t", f"{d:.3f}", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000"]
-
     filters = [video_filter() if media == "video" else photo_filter(item, frames)]
     current = "v0"
 
@@ -427,7 +478,7 @@ def render_clip(item):
         opacity = GRAIN_OPACITY.get(grain, 0.095)
         filters.append(
             f"[{grain_idx}:v]fps={FPS},scale={W}:{H}:force_original_aspect_ratio=increase,"
-            f"crop={W}:{H},trim=duration={d:.3f},setpts=PTS-STARTPTS[g]"
+            f"crop={W}:{H},trim=end_frame={frames},setpts=PTS-STARTPTS[g]"
         )
         filters.append(f"[{current}][g]blend=all_mode=screen:all_opacity={opacity}[vgrain]")
         current = "vgrain"
@@ -441,26 +492,15 @@ def render_clip(item):
         filters.append(f"[{current}][tov]overlay=80:90:eof_action=pass[vtyped]")
         current = "vtyped"
 
-    filters.append(f"[{current}]trim=duration={d:.3f},setpts=PTS-STARTPTS[vout]")
-
-    if type_idx is not None:
-        filters.append(f"[{silent_idx}:a]atrim=0:{d:.3f},asetpts=PTS-STARTPTS[sa]")
-        filters.append(
-            f"[{type_idx}:a]atrim=0:{typing_duration:.3f},asetpts=PTS-STARTPTS,volume=0.35[ta]"
-        )
-        filters.append("[sa][ta]amix=inputs=2:duration=first:dropout_transition=0[aout]")
-    else:
-        filters.append(f"[{silent_idx}:a]atrim=0:{d:.3f},asetpts=PTS-STARTPTS[aout]")
+    filters.append(f"[{current}]trim=end_frame={frames},setpts=PTS-STARTPTS[vout]")
 
     cmd += [
         "-filter_complex",
         ";".join(filters),
         "-map",
         "[vout]",
-        "-map",
-        "[aout]",
-        "-t",
-        f"{d:.3f}",
+        "-frames:v",
+        str(frames),
         "-c:v",
         "h264_nvenc",
         "-preset",
@@ -471,14 +511,7 @@ def render_clip(item):
         "yuv420p",
         "-r",
         str(FPS),
-        "-c:a",
-        "aac",
-        "-b:a",
-        "128k",
-        "-ar",
-        "48000",
-        "-ac",
-        "2",
+        "-an",
         "-movflags",
         "+faststart",
         str(base_output),
@@ -498,7 +531,7 @@ def render_clip(item):
             "ffmpeg", "-hide_banner", "-y", "-i", str(base_output),
             "-vf", f"subtitles='{esc_path(local_srt)}':fontsdir='/usr/share/fonts/opentype/noto':force_style={SUBTITLE_STYLE}",
             "-c:v", "h264_nvenc", "-preset", "p4", "-cq", "20", "-pix_fmt", "yuv420p",
-            "-r", str(FPS), "-c:a", "copy", "-movflags", "+faststart", str(output),
+            "-r", str(FPS), "-frames:v", str(frames), "-an", "-movflags", "+faststart", str(output),
         ]
         result = run_ffmpeg(sub_cmd, f"{clip_label(item)}_subtitles")
         if result.returncode != 0:
@@ -510,12 +543,12 @@ def render_clip(item):
 
 def render_clip_optimized(item):
     output = clip_path(item)
-    if output.exists() and output.stat().st_size > 100000:
+    if valid_cached_clip(output, frame_count(item)):
         print(f"[skip] {output.name}", flush=True)
         return
 
     d = duration(item)
-    frames = max(1, int(round(d * FPS)))
+    frames = frame_count(item)
     src = source_path(item)
     if not src.exists():
         raise FileNotFoundError(src)
@@ -549,15 +582,6 @@ def render_clip_optimized(item):
         input_count += 1
         cmd += ["-i", str(typing_overlay)]
 
-    type_idx = None
-    if typing and TYPE_SFX.exists():
-        type_idx = input_count
-        input_count += 1
-        cmd += ["-stream_loop", "-1", "-i", str(TYPE_SFX)]
-
-    silent_idx = input_count
-    cmd += ["-f", "lavfi", "-t", f"{d:.3f}", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000"]
-
     kb = (edit.get("kenburns_type") or "static_hold")
     if media == "photo" and kb in ("none", "static_hold"):
         filters = [static_photo_filter().replace("__DURATION__", f"{d:.3f}")]
@@ -569,7 +593,7 @@ def render_clip_optimized(item):
         opacity = GRAIN_OPACITY.get(grain, 0.095)
         filters.append(
             f"[{grain_idx}:v]fps={FPS},scale={W}:{H}:force_original_aspect_ratio=increase,"
-            f"crop={W}:{H},trim=duration={d:.3f},setpts=PTS-STARTPTS[g]"
+            f"crop={W}:{H},trim=end_frame={frames},setpts=PTS-STARTPTS[g]"
         )
         filters.append(f"[{current}][g]blend=all_mode=screen:all_opacity={opacity}[vgrain]")
         current = "vgrain"
@@ -591,23 +615,14 @@ def render_clip_optimized(item):
         )
         current = "vsub"
 
-    filters.append(f"[{current}]trim=duration={d:.3f},setpts=PTS-STARTPTS[vout]")
-
-    if type_idx is not None:
-        filters.append(f"[{silent_idx}:a]atrim=0:{d:.3f},asetpts=PTS-STARTPTS[sa]")
-        filters.append(
-            f"[{type_idx}:a]atrim=0:{typing_duration:.3f},asetpts=PTS-STARTPTS,volume=0.35[ta]"
-        )
-        filters.append("[sa][ta]amix=inputs=2:duration=first:dropout_transition=0[aout]")
-    else:
-        filters.append(f"[{silent_idx}:a]atrim=0:{d:.3f},asetpts=PTS-STARTPTS[aout]")
+    filters.append(f"[{current}]trim=end_frame={frames},setpts=PTS-STARTPTS[vout]")
 
     cmd += [
         "-filter_complex", ";".join(filters),
-        "-map", "[vout]", "-map", "[aout]", "-t", f"{d:.3f}",
+        "-map", "[vout]", "-frames:v", str(frames),
         "-c:v", "h264_nvenc", "-preset", "p4", "-cq", "20",
         "-pix_fmt", "yuv420p", "-r", str(FPS),
-        "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
+        "-an",
         str(output),
     ]
     print(
@@ -630,6 +645,22 @@ if args.optimized:
 else:
     for item in ITEMS:
         render_clip(item)
+
+expected_total_frames = ITEMS[-1]["_end_frame"] - ITEMS[0]["_start_frame"]
+actual_clip_frames = 0
+for item in ITEMS:
+    frames, rate = probe_video(clip_path(item))
+    if frames != frame_count(item) or rate != f"{FPS}/1":
+        raise RuntimeError(
+            f"Frame QC failed for {clip_label(item)}: expected={frame_count(item)} "
+            f"actual={frames} rate={rate}"
+        )
+    actual_clip_frames += frames
+if actual_clip_frames != expected_total_frames:
+    raise RuntimeError(
+        f"Clip frame total mismatch: expected={expected_total_frames} actual={actual_clip_frames}"
+    )
+print(f"[frame-qc] clips={len(ITEMS)} total_frames={actual_clip_frames} fps={FPS}", flush=True)
 
 concat = TMP_DIR / "concat_list_final.txt"
 concat.write_text("".join(f"file '{clip_path(item)}'\n" for item in ITEMS), encoding="utf-8")
@@ -657,20 +688,47 @@ if result.returncode != 0:
     print(result.stdout[-4000:], flush=True)
     raise RuntimeError("concat failed")
 
+visual_frames, visual_rate = probe_video(visual)
+if visual_frames != expected_total_frames or visual_rate != f"{FPS}/1":
+    raise RuntimeError(
+        f"Concat frame QC failed: expected={expected_total_frames} actual={visual_frames} rate={visual_rate}"
+    )
+print(f"[frame-qc] concat_frames={visual_frames} duration={visual_frames / FPS:.3f}s", flush=True)
+
 final = Path(args.output) if args.output else FINAL_DIR / "final_video.mp4"
 final.parent.mkdir(parents=True, exist_ok=True)
-final_duration = f"{float(ITEMS[-1]['end']):.3f}"
-cmd = [
-    "ffmpeg", "-hide_banner", "-y",
-    "-i", str(visual),
-    "-i", str(VOICE),
-    "-filter_complex", (
-        "[0:a]volume=1.0[sfx];[1:a]volume=1.0[vo];"
-        "[vo][sfx]amix=inputs=2:duration=first:dropout_transition=0[a]"
-    ),
-    "-map", "0:v",
-    "-map", "[a]",
-    "-t", final_duration,
+final_duration = expected_total_frames / FPS
+typing_events = []
+for item in ITEMS:
+    text = (item.get("edit") or {}).get("text_overlay_ja")
+    if text:
+        event_duration = min(3.5, max(0.8, len(text.replace("\n", "")) * 0.08))
+        event_duration = min(event_duration, duration(item))
+        typing_events.append((item["_start_frame"] / FPS, event_duration))
+
+cmd = ["ffmpeg", "-hide_banner", "-y", "-i", str(visual), "-i", str(VOICE)]
+if typing_events and TYPE_SFX.exists():
+    cmd += ["-stream_loop", "-1", "-i", str(TYPE_SFX)]
+    split_labels = "".join(f"[typein{i}]" for i in range(len(typing_events)))
+    filters = [f"[2:a]asplit={len(typing_events)}{split_labels}", "[1:a]volume=1.0[vo]"]
+    mixed_labels = []
+    for i, (start, event_duration) in enumerate(typing_events):
+        delay_ms = round(start * 1000)
+        filters.append(
+            f"[typein{i}]atrim=0:{event_duration:.3f},asetpts=PTS-STARTPTS,"
+            f"volume=0.35,adelay={delay_ms}|{delay_ms}[type{i}]"
+        )
+        mixed_labels.append(f"[type{i}]")
+    filters.append(
+        f"[vo]{''.join(mixed_labels)}amix=inputs={len(typing_events) + 1}:"
+        "duration=first:dropout_transition=0[a]"
+    )
+    cmd += ["-filter_complex", ";".join(filters), "-map", "0:v:0", "-map", "[a]"]
+else:
+    cmd += ["-map", "0:v:0", "-map", "1:a:0"]
+
+cmd += [
+    "-t", f"{final_duration:.3f}",
     "-c:v", "copy",
     "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
     "-movflags", "+faststart",
@@ -681,5 +739,12 @@ result = run_ffmpeg(cmd, "final_mux")
 if result.returncode != 0:
     print(result.stdout[-6000:], flush=True)
     raise RuntimeError("final mux failed")
+
+final_frames, final_rate = probe_video(final)
+if final_frames != expected_total_frames or final_rate != f"{FPS}/1":
+    raise RuntimeError(
+        f"Final frame QC failed: expected={expected_total_frames} actual={final_frames} rate={final_rate}"
+    )
+print(f"[frame-qc] final_frames={final_frames} drift_frames=0", flush=True)
 
 print("[done]", final, flush=True)

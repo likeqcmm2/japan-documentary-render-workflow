@@ -6,9 +6,9 @@ This repo packages the exact pipeline used for the production render:
 
 1. Generate one image per JSON shot with OpenAI `gpt-image-2`.
 2. For shots where `media_type` is `video`, run LTX 2.3 Image-to-Video in ComfyUI.
-3. Render every shot into a fixed-duration clip with FFmpeg.
-4. Apply per-shot Ken Burns, grain, vignette, typing overlays, typing sound, and selective hard subtitles.
-5. Concatenate all clips, mux voice-over, verify duration, upload to Google Drive with rclone.
+3. Quantize the absolute JSON timeline once at 25 fps and render every shot to its assigned frame interval.
+4. Apply per-shot Ken Burns, grain, vignette, typing overlays, and selective hard subtitles to video-only clips.
+5. Concatenate the frame-locked clips, mix typing sounds globally with voice-over, verify zero frame drift, and upload with rclone.
 
 The render stage defaults to the optimized renderer: hardsubs are burned during the
 main clip encode, static-hold photos use a direct centered crop, and six clips render
@@ -40,8 +40,9 @@ RENDER_MODE=legacy bash scripts/run_full_pipeline.sh shot.json voice.wav subtitl
 On the Edo benchmark with 206 shots, the legacy render took 33m 36.6s and the
 optimized render took 14m 17.6s: 57.47% less wall time (2.35x faster). Both outputs
 were 1920x1080, 25 fps, and 1519.041s long. Six sampled frame comparisons had SSIM
-between 0.9887 and 0.9974. The typing sound remains mixed per clip intentionally;
-moving it to a global timeline is not enabled because it could change shot sync.
+between 0.9887 and 0.9974. Typing sounds are now placed on the absolute global
+timeline and mixed with voice-over only once; intermediate clips contain no AAC
+track, preventing encoder padding from accumulating across hundreds of shots.
 
 A 30-shot concurrency benchmark on the same instance took 98.977s with 2 workers
 and 77.044s with 3 workers, a 22.16% improvement, with no FFmpeg errors. The full
@@ -137,7 +138,7 @@ in the JSON array. All reusable asset names use that runtime order:
 ```text
 generated_images/shot_001.png
 ltx_videos/shot_001.mp4
-render_optimized/clips_final_hardsub/clip_001.mp4
+render_optimized/clips_final_hardsub_frame_locked/clip_001.mp4
 ```
 
 The original `id` is preserved in logs as `source_id`. Never derive asset names,
@@ -453,7 +454,8 @@ The scripts are intentionally resumable:
 - Image generation skips existing `generated_images/shot_###.png` unless `--force` is passed. `###` is the one-based runtime position in JSON, not the source `id`.
 - Image generation records failures, completes the first pass, retries only failed images for 3 rounds, and pauses the workflow with `failed-images.json` if any remain unsuccessful.
 - LTX skips existing `ltx_videos/shot_###.mp4`.
-- Final render skips existing `clips_final_hardsub/clip_###.mp4`.
+- Final render skips an existing `clips_final_hardsub_frame_locked/clip_###.mp4`
+  only after ffprobe confirms the expected frame count, 25 fps, and no audio stream.
 
 If ComfyUI resets or a network connection drops, restart the same command. Already completed files should be skipped.
 
@@ -591,6 +593,10 @@ The final production style includes:
 - Request pacing: max `15` concurrent, new request every `4s`.
 - LTX I2V: request `1920x1080`, `25fps`, duration `ceil(end-start)`.
 - FFmpeg render output: `1920x1080`, `25fps`, `h264_nvenc`.
+- Shot timing uses absolute frame boundaries: `round(start * 25)` to
+  `round(end * 25)`. Never round each shot duration independently.
+- Intermediate clips are video-only. Typing SFX is delayed to the shot's absolute
+  start frame and mixed globally with voice-over during the final mux.
 - If a new Vast template reports `h264_nvenc` / `OpenEncodeSessionEx failed` / `unsupported device`, `render_final_video.py` automatically retries that FFmpeg command with `libx264`.
 - Photo Ken Burns uses high-resolution intermediate scaling (`scale=8000`) before `zoompan` to avoid jerky motion.
 - Real grain asset from `assets/grain.mp4`, not synthetic FFmpeg noise.
@@ -605,7 +611,18 @@ After render:
 ffprobe -v error -show_entries format=duration,size -of default=nw=1:nk=1 /workspace/japan_project/final/final_video.mp4
 ```
 
-Compare duration with `end` of the last JSON item. Small drift under ~0.5s is acceptable.
+The renderer performs mandatory frame QC before producing the final file:
+
+```text
+clip frames = end_frame - start_frame
+sum of clip frames = round(last JSON end * 25)
+concat frames = sum of clip frames
+final frames = concat frames
+```
+
+Any mismatch stops the workflow. At 25 fps, final duration may differ from the
+millisecond JSON endpoint by at most half a frame (`0.020s`); this quantization is
+bounded globally and cannot accumulate from shot to shot.
 
 Extract QC frames:
 
