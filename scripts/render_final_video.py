@@ -721,7 +721,8 @@ if typing_events and TYPE_SFX.exists():
         mixed_labels.append(f"[type{i}]")
     filters.append(
         f"[vo]{''.join(mixed_labels)}amix=inputs={len(typing_events) + 1}:"
-        "duration=first:dropout_transition=0[a]"
+        "duration=first:dropout_transition=0:normalize=0,"
+        "alimiter=limit=0.95:attack=5:release=50:latency=1[a]"
     )
     cmd += ["-filter_complex", ";".join(filters), "-map", "0:v:0", "-map", "[a]"]
 else:

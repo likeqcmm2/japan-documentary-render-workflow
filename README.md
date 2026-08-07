@@ -597,6 +597,10 @@ The final production style includes:
   `round(end * 25)`. Never round each shot duration independently.
 - Intermediate clips are video-only. Typing SFX is delayed to the shot's absolute
   start frame and mixed globally with voice-over during the final mux.
+- Global typing SFX mixing uses `amix normalize=0`, followed by a peak limiter.
+  This preserves the original voice-over level instead of dividing it by the
+  number of delayed typing tracks; the limiter only protects moments where voice
+  and typing transients overlap.
 - If a new Vast template reports `h264_nvenc` / `OpenEncodeSessionEx failed` / `unsupported device`, `render_final_video.py` automatically retries that FFmpeg command with `libx264`.
 - Photo Ken Burns uses high-resolution intermediate scaling (`scale=8000`) before `zoompan` to avoid jerky motion.
 - Real grain asset from `assets/grain.mp4`, not synthetic FFmpeg noise.
