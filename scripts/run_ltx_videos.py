@@ -125,6 +125,8 @@ def run_one(item):
     if resp.get("node_errors"):
         raise RuntimeError(json.dumps(resp["node_errors"], ensure_ascii=False))
     pid = resp["prompt_id"]
+    empty_since = None
+    last_queue_check = 0
     while True:
         hist = request_json(f"{args.comfy_url}/history/{pid}", timeout=60)
         if pid in hist:
@@ -139,19 +141,40 @@ def run_one(item):
             print(f"[done] shot_{shot_id:03d} elapsed={elapsed:.1f}s -> {dst}", flush=True)
             log({"id": source_id, "runtime_id": shot_id, "ok": True, "duration_requested": duration, "elapsed_sec": round(elapsed, 3), "output": str(dst), "motion_prompt": motion_prompt})
             return True
-        if int(time.time() - started) % 30 < 5:
+        now = time.time()
+        if now - last_queue_check >= 10:
             q = request_json(f"{args.comfy_url}/queue", timeout=60)
-            print(f"[wait] shot_{shot_id:03d} t={int(time.time()-started)}s running={len(q.get('queue_running', []))} pending={len(q.get('queue_pending', []))}", flush=True)
+            last_queue_check = now
+            running = len(q.get("queue_running", []))
+            pending = len(q.get("queue_pending", []))
+            if running or pending:
+                empty_since = None
+            elif now - started >= 30:
+                empty_since = empty_since or now
+                if now - empty_since >= 120:
+                    raise RuntimeError(
+                        f"ComfyUI prompt {pid} disappeared from history and queue "
+                        f"for {int(now - empty_since)}s (service likely restarted)"
+                    )
+            if int(now - started) % 30 < 10:
+                print(f"[wait] shot_{shot_id:03d} t={int(now-started)}s running={running} pending={pending}", flush=True)
         time.sleep(5)
 
 print(f"[config] video_jobs={len(video_items)} size={WIDTH}x{HEIGHT} fps={FPS}", flush=True)
 for item in video_items:
-    try:
-        run_one(item)
-    except Exception as e:
-        shot_id = item["_runtime_id"]
-        source_id = item.get("id", shot_id)
-        print(f"[fatal] shot_{shot_id:03d} source_id={source_id}: {e}", flush=True)
-        log({"id": source_id, "runtime_id": shot_id, "ok": False, "error": str(e)})
-        raise
+    shot_id = item["_runtime_id"]
+    source_id = item.get("id", shot_id)
+    for attempt in range(1, 4):
+        try:
+            run_one(item)
+            break
+        except Exception as e:
+            if attempt < 3:
+                print(f"[ltx-retry] shot_{shot_id:03d} source_id={source_id} attempt={attempt}/3 error={e}", flush=True)
+                log({"id": source_id, "runtime_id": shot_id, "ok": False, "retry": True, "attempt": attempt, "error": str(e)})
+                time.sleep(30)
+                continue
+            print(f"[fatal] shot_{shot_id:03d} source_id={source_id} attempts=3: {e}", flush=True)
+            log({"id": source_id, "runtime_id": shot_id, "ok": False, "attempts": 3, "error": str(e)})
+            raise
 print("[summary] all LTX video shots completed", flush=True)
