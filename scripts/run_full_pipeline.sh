@@ -9,7 +9,7 @@ VOICE="${2:?Usage: scripts/run_full_pipeline.sh shot_list.json voice.wav subtitl
 SRT="${3:?Usage: scripts/run_full_pipeline.sh shot_list.json voice.wav subtitles.srt}"
 
 mkdir -p "$PROJECT/inputs" "$PROJECT/comfy_workflows" "$PROJECT/assets"
-cp "$REPO_DIR/comfy_workflows/ltx-2.3-i2v.payload.json" "$PROJECT/comfy_workflows/ltx-2.3-i2v.payload.json"
+cp "$REPO_DIR/comfy_workflows/ltx-2.5-nvfp4-i2v.payload.json" "$PROJECT/comfy_workflows/ltx-2.5-nvfp4-i2v.payload.json"
 cp "$REPO_DIR/assets/grain.mp4" "$PROJECT/assets/grain.mp4"
 cp "$REPO_DIR/assets/keyboard-typing-sound-effect-335503.mp3" "$PROJECT/assets/keyboard-typing-sound-effect-335503.mp3"
 cp "$REPO_DIR/assets/YujiBoku-Regular.ttf" "$PROJECT/assets/YujiBoku-Regular.ttf"
@@ -39,7 +39,10 @@ python3 "$REPO_DIR/scripts/run_ltx_videos.py" \
   --input-json "$PROJECT/inputs/shot_list.json" \
   --images-dir "$PROJECT/generated_images" \
   --output-dir "$PROJECT/ltx_videos" \
-  --payload "$PROJECT/comfy_workflows/ltx-2.3-i2v.payload.json"
+  --payload "$PROJECT/comfy_workflows/ltx-2.5-nvfp4-i2v.payload.json" \
+  --megapixels "${LTX_MEGAPIXELS:-0.9}" \
+  --aspect-ratio "${LTX_ASPECT_RATIO:-16:9 (Widescreen)}" \
+  --multiple "${LTX_MULTIPLE:-32}"
 
 python3 "$REPO_DIR/scripts/validate_project.py" \
   --project "$PROJECT" \

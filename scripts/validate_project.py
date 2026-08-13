@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import math
 import subprocess
 from collections import Counter
 from pathlib import Path
@@ -23,6 +24,20 @@ def ffprobe_duration(path: Path):
         ).strip()
         return float(out)
     except Exception:
+        return None
+
+
+def ffprobe_video(path: Path):
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+             "stream=width,height,r_frame_rate:format=duration", "-of", "json", str(path)],
+            check=True, capture_output=True, text=True,
+        )
+        data = json.loads(result.stdout)
+        stream = data["streams"][0]
+        return int(stream["width"]), int(stream["height"]), stream["r_frame_rate"], float(data["format"]["duration"])
+    except (subprocess.SubprocessError, KeyError, ValueError, json.JSONDecodeError, IndexError):
         return None
 
 
@@ -53,6 +68,7 @@ def main():
 
     missing_images = []
     missing_ltx = []
+    invalid_ltx = []
     for sid, item in runtime_items:
         image_path = images_dir / f"shot_{sid:03d}.png"
         if not image_path.exists():
@@ -61,9 +77,15 @@ def main():
             video_path = ltx_dir / f"shot_{sid:03d}.mp4"
             if not video_path.exists() or video_path.stat().st_size < 100000:
                 missing_ltx.append({"runtime_id": sid, "source_id": item.get("id", sid)})
+            else:
+                info = ffprobe_video(video_path)
+                expected_duration = max(1, int(math.ceil(float(item["end"]) - float(item["start"]))))
+                if not info or info[0] < 1200 or info[1] < 672 or info[2] != "25/1" or abs(info[3] - expected_duration) > 1.0:
+                    invalid_ltx.append({"runtime_id": sid, "source_id": item.get("id", sid), "probe": info, "expected_duration": expected_duration})
 
     print(f"missing_images={len(missing_images)} {missing_images[:40]}")
     print(f"missing_ltx_videos={len(missing_ltx)} {missing_ltx[:40]}")
+    print(f"invalid_ltx_videos={len(invalid_ltx)} {invalid_ltx[:40]}")
 
     if args.voice:
         voice = Path(args.voice)
@@ -77,7 +99,7 @@ def main():
         srt = Path(args.srt)
         print("srt_exists", srt.exists(), srt, "size", srt.stat().st_size if srt.exists() else None)
 
-    if missing_images or missing_ltx:
+    if missing_images or missing_ltx or invalid_ltx:
         raise SystemExit(1)
 
 

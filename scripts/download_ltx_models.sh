@@ -1,55 +1,73 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# This helper records the model filenames required by comfy_workflows/ltx-2.3-i2v.payload.json.
-# On the Vast template used in production, these files were already present.
-# If a fresh ComfyUI template is missing them, use HF_TOKEN locally in secrets/.env or export it before running.
-
+# Exact model set for comfy_workflows/ltx-2.5-nvfp4-i2v.payload.json.
+# Pass a read-only Hugging Face token through HF_TOKEN; never commit it.
 COMFY="${COMFY:-/workspace/ComfyUI}"
-if [ -f "secrets/.env" ]; then
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VENV="${VENV:-/venv/main}"
+
+if [ -f "$REPO_DIR/secrets/.env" ]; then
   # shellcheck disable=SC1091
-  source "secrets/.env"
-fi
-if [ -n "${HF_TOKEN:-}" ]; then
-  export HF_TOKEN
+  source "$REPO_DIR/secrets/.env"
 fi
 
-python3 -m pip install --upgrade huggingface_hub hf_xet >/dev/null 2>&1 || \
-  python3 -m pip install --break-system-packages --upgrade huggingface_hub hf_xet >/dev/null
+"$VENV/bin/python" -m pip install --upgrade huggingface_hub hf_xet safetensors >/dev/null
+export PATH="$VENV/bin:$PATH"
+export HF_XET_HIGH_PERFORMANCE="${HF_XET_HIGH_PERFORMANCE:-1}"
 
-mkdir -p "$COMFY/models/checkpoints" "$COMFY/models/latent_upscale_models" "$COMFY/models/loras" "$COMFY/models/text_encoders"
-
-echo "[download] downloading the exact LTX 2.3 files referenced by model_manifest.json"
-
-HF_ARGS=()
+HF_ARGS=(--max-workers "${HF_MAX_WORKERS:-16}")
 if [ -n "${HF_TOKEN:-}" ]; then
   HF_ARGS+=(--token "$HF_TOKEN")
 fi
-HF_ARGS+=(--max-workers 16)
 
-hf download "Lightricks/LTX-2.3-fp8" \
-  "ltx-2.3-22b-dev-fp8.safetensors" \
-  --local-dir "$COMFY/models/checkpoints" "${HF_ARGS[@]}" || true
+mkdir -p "$COMFY/models"/{diffusion_models,text_encoders,vae,latent_upscale_models}
 
-hf download "Lightricks/LTX-2.3" \
-  "ltx-2.3-spatial-upscaler-x2-1.1.safetensors" \
-  --local-dir "$COMFY/models/latent_upscale_models" "${HF_ARGS[@]}" || true
+download_one() {
+  local repo="$1" remote_path="$2" target_dir="$3"
+  local filename="${remote_path##*/}"
+  local staging
+  staging="$(mktemp -d "$COMFY/models/.ltx25-download.XXXXXX")"
+  echo "[download] $repo/$remote_path -> $target_dir/$filename"
+  hf download "$repo" "$remote_path" --local-dir "$staging" "${HF_ARGS[@]}"
+  install -m 0644 "$staging/$remote_path" "$target_dir/$filename"
+  rm -rf "$staging"
+}
 
-hf download "Comfy-Org/ltx-2.3" \
-  "split_files/loras/ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors" \
-  --local-dir "$COMFY/models/loras" "${HF_ARGS[@]}" || true
-mv -f "$COMFY/models/loras/split_files/loras/ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors" "$COMFY/models/loras/" 2>/dev/null || true
+download_one "BennyDaBall/LTX-2.5-22b-distilled-nvfp4-comfy" \
+  "ltx-2.5-22b-distilled-transformer-nvfp4-comfy.safetensors" "$COMFY/models/diffusion_models"
+download_one "Lightricks/LTX-2.5" \
+  "text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors" "$COMFY/models/text_encoders"
+download_one "Comfy-Org/gemma-4" \
+  "text_encoders/gemma4_e2b_it_bf16.safetensors" "$COMFY/models/text_encoders"
+download_one "Lightricks/LTX-2.5" \
+  "vae/ltx-2.5-video-vae-conv-bf16.safetensors" "$COMFY/models/vae"
+download_one "Lightricks/LTX-2.5" \
+  "vae/ltx-2.5-audio-vae-bf16.safetensors" "$COMFY/models/vae"
+download_one "Lightricks/LTX-2.5" \
+  "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors" "$COMFY/models/latent_upscale_models"
 
-hf download "Comfy-Org/ltx-2" \
-  "split_files/loras/gemma-3-12b-it-abliterated_lora_rank64_bf16.safetensors" \
-  --local-dir "$COMFY/models/loras" "${HF_ARGS[@]}" || true
-mv -f "$COMFY/models/loras/split_files/loras/gemma-3-12b-it-abliterated_lora_rank64_bf16.safetensors" "$COMFY/models/loras/" 2>/dev/null || true
+COMFY="$COMFY" MANIFEST="$REPO_DIR/model_manifest.json" "$VENV/bin/python" - <<'PY'
+import json, os
+from pathlib import Path
+from safetensors import safe_open
 
-hf download "Comfy-Org/ltx-2" \
-  "split_files/text_encoders/gemma_3_12B_it_fp4_mixed.safetensors" \
-  --local-dir "$COMFY/models/text_encoders" "${HF_ARGS[@]}" || true
-mv -f "$COMFY/models/text_encoders/split_files/text_encoders/gemma_3_12B_it_fp4_mixed.safetensors" "$COMFY/models/text_encoders/" 2>/dev/null || true
+comfy = Path(os.environ["COMFY"])
+manifest = json.loads(Path(os.environ["MANIFEST"]).read_text())
+for model in manifest["models_referenced_by_payload"]:
+    path = comfy / model["target_dir_hint"].split("ComfyUI/models/", 1)[1] / model["filename"]
+    actual = path.stat().st_size if path.exists() else -1
+    expected = model["expected_bytes"]
+    if actual != expected:
+        raise SystemExit(f"size mismatch: {path} expected={expected} actual={actual}")
+    print(f"[verify] {path.name} bytes={actual}")
 
-find "$COMFY/models/loras/split_files" "$COMFY/models/text_encoders/split_files" -type d -empty -delete 2>/dev/null || true
+nvfp4 = comfy / "models/diffusion_models/ltx-2.5-22b-distilled-transformer-nvfp4-comfy.safetensors"
+with safe_open(nvfp4, framework="pt", device="cpu") as f:
+    markers = sum(key.endswith(".comfy_quant") for key in f.keys())
+if markers != 1176:
+    raise SystemExit(f"wrong Benny NVFP4 marker count: expected=1176 actual={markers}")
+print("[verify] Benny NVFP4 .comfy_quant markers=1176")
+PY
 
-echo "[download] done; verify missing files with model_manifest.json and ComfyUI startup logs."
+echo "[download] all LTX 2.5 models downloaded and verified"
