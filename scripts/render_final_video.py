@@ -223,6 +223,9 @@ def photo_filter(item, frames):
 
 
 def video_filter():
+    # LTX 2.5 production sources are generated at 0.9 MP (typically 1280x704).
+    # Fit them inside the 1920x1080 canvas and deliberately retain thin black
+    # letterbox bars when the source aspect ratio differs slightly.
     return (
         f"[0:v]fps={FPS},scale={W}:{H}:force_original_aspect_ratio=decrease,"
         f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:black,"

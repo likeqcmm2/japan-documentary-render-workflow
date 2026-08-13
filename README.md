@@ -5,7 +5,7 @@ Production workflow to render a documentary-style YouTube video from a shot-list
 This repo packages the exact pipeline used for the production render:
 
 1. Generate one image per JSON shot with OpenAI `gpt-image-2`.
-2. For shots where `media_type` is `video`, run LTX 2.3 Image-to-Video in ComfyUI.
+2. For shots where `media_type` is `video`, run LTX 2.5 Image-to-Video using Benny NVFP4 and the Conv VAE in ComfyUI.
 3. Quantize the absolute JSON timeline once at 25 fps and render every shot to its assigned frame interval.
 4. Apply per-shot Ken Burns, grain, vignette, typing overlays, and selective hard subtitles to video-only clips.
 5. Concatenate the frame-locked clips, mix typing sounds globally with voice-over, verify zero frame drift, and upload with rclone.
@@ -159,7 +159,7 @@ Field behavior:
   suppresses every SRT entry covered by the grouped shot, regardless of how many
   source IDs appear in `id`.
 - `edit.kenburns_type: "none"` or `"static_hold"`: no animated Ken Burns movement.
-- Video outputs from LTX are padded to `1920x1080` with black edges if the LTX workflow emits a shorter frame such as `1920x1024`.
+- LTX production sources default to `0.9 MP`, 16:9 (observed as `1280x704`). The final renderer fits them into a `1920x1080` canvas while preserving aspect ratio and deliberately retains the resulting thin black bars above and below.
 
 ## Packaged Reusable Assets
 
@@ -168,67 +168,40 @@ Committed assets:
 - `assets/grain.mp4`
 - `assets/keyboard-typing-sound-effect-335503.mp3`
 - `assets/YujiBoku-Regular.ttf`
-- `comfy_workflows/ltx-2.3-i2v.payload.json`
+- `comfy_workflows/ltx-2.5-nvfp4-i2v.payload.json`
 
 The Comfy payload is the proven production payload copied from:
 
 ```text
-/opt/comfyui-api-wrapper/payloads/ltx-2.3-i2v.json
+/opt/comfyui-api-wrapper/payloads/video_ltx2_5_i2v_nvfp4_conv_vae.json
 ```
 
 ## Model Requirements
 
 Read `model_manifest.json`.
 
-The proven LTX payload references:
+The proven LTX 2.5 payload references:
 
-- `Lightricks/LTX-2.3-fp8` -> `ComfyUI/models/checkpoints/ltx-2.3-22b-dev-fp8.safetensors`
-- `Comfy-Org/ltx-2` -> `ComfyUI/models/text_encoders/gemma_3_12B_it_fp4_mixed.safetensors`
-- `Lightricks/LTX-2.3` -> `ComfyUI/models/latent_upscale_models/ltx-2.3-spatial-upscaler-x2-1.1.safetensors`
-- `Comfy-Org/ltx-2.3` -> `ComfyUI/models/loras/ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors`
-- `Comfy-Org/ltx-2` -> `ComfyUI/models/loras/gemma-3-12b-it-abliterated_lora_rank64_bf16.safetensors`
+- `BennyDaBall/LTX-2.5-22b-distilled-nvfp4-comfy` -> `models/diffusion_models/ltx-2.5-22b-distilled-transformer-nvfp4-comfy.safetensors`
+- `Lightricks/LTX-2.5` -> `models/text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors`
+- `Lightricks/LTX-2.5` -> `models/vae/ltx-2.5-video-vae-conv-bf16.safetensors`
+- `Lightricks/LTX-2.5` -> `models/vae/ltx-2.5-audio-vae-bf16.safetensors`
+- `Lightricks/LTX-2.5` -> `models/latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors`
+- `Comfy-Org/gemma-4` -> `models/text_encoders/gemma4_e2b_it_bf16.safetensors` (kept in the proven graph, while production disables prompt enhancement)
 
-On the Vast ComfyUI template used in production, these were already available. On a new server, first check ComfyUI startup logs. If missing, use:
+This configuration requires ComfyUI `>= 0.32.0` and a Blackwell GPU such as RTX 5090 for the NVFP4 kernels. On a new server use:
 
 ```bash
 scripts/download_ltx_models.sh
 ```
 
-The helper installs `huggingface_hub` and `hf_xet`. If a model is not found in the default repo, place it manually according to `model_manifest.json`.
-
-After download, verify exact model placement:
-
-```bash
-python3 - <<'PY'
-from pathlib import Path
-checks = [
-  ("checkpoints", "ltx-2.3-22b-dev-fp8.safetensors"),
-  ("text_encoders", "gemma_3_12B_it_fp4_mixed.safetensors"),
-  ("latent_upscale_models", "ltx-2.3-spatial-upscaler-x2-1.1.safetensors"),
-  ("loras", "ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors"),
-  ("loras", "gemma-3-12b-it-abliterated_lora_rank64_bf16.safetensors"),
-]
-for folder, name in checks:
-    path = Path("/workspace/ComfyUI/models") / folder / name
-    print(path, path.exists(), path.stat().st_size if path.exists() else None)
-PY
-```
-
-Expected production-tested sizes:
-
-```text
-ltx-2.3-22b-dev-fp8.safetensors                                      29145431166
-gemma_3_12B_it_fp4_mixed.safetensors                                  9447702218
-ltx-2.3-spatial-upscaler-x2-1.1.safetensors                            995743560
-ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors 2741024390
-gemma-3-12b-it-abliterated_lora_rank64_bf16.safetensors                628203616
-```
+The helper uses `hf_xet` high-performance mode, verifies every exact byte size, and verifies that Benny's transformer contains exactly 1,176 `.comfy_quant` markers. `HF_TOKEN` is read from the environment or `secrets/.env`; never commit it.
 
 After downloading new models, restart ComfyUI so the model registry reloads:
 
 ```bash
 pgrep -af "ComfyUI|main.py"
-kill <COMFY_MAIN_PID> || true
+supervisorctl restart comfyui
 sleep 5
 curl -fsS http://127.0.0.1:18188/system_stats >/dev/null && echo comfy_api_ready
 ```
@@ -412,7 +385,8 @@ python3 scripts/run_ltx_videos.py \
   --input-json /workspace/japan_project/inputs/smoke_ltx_one.json \
   --images-dir /workspace/japan_project/generated_images_smoke \
   --output-dir /workspace/japan_project/ltx_videos_smoke \
-  --payload /workspace/japan_project/comfy_workflows/ltx-2.3-i2v.payload.json
+  --payload /workspace/japan_project/comfy_workflows/ltx-2.5-nvfp4-i2v.payload.json \
+  --megapixels 0.9
 ```
 
 Render the short smoke video:
@@ -441,7 +415,7 @@ Do not terminate a long run just because it appears slow.
 Observed production timings:
 
 - GPT Image generation: many requests run concurrently; usually minutes for ~177 shots.
-- LTX I2V: slowest step. A 6-19 second shot can take roughly 40-285 seconds each. A project with ~63 video shots can take hours.
+- LTX 2.5 I2V: production defaults to 0.9 MP for throughput. A tested 15-second shot took roughly 42-48 seconds on RTX 5090 after model load; a large project can still take hours.
 - FFmpeg render: faster than LTX, but still can take several minutes for ~177 clips.
 - Upload: depends on file size; the production file was ~1.1GB.
 
@@ -552,17 +526,18 @@ Cause: wrong Hugging Face repo/path. The LTX files are spread across multiple re
 
 Fix:
 
-Use the current `scripts/download_ltx_models.sh`, which downloads these exact files:
+Use the current `scripts/download_ltx_models.sh`, which downloads and verifies these exact files:
 
 ```text
-Lightricks/LTX-2.3-fp8/ltx-2.3-22b-dev-fp8.safetensors
-Lightricks/LTX-2.3/ltx-2.3-spatial-upscaler-x2-1.1.safetensors
-Comfy-Org/ltx-2.3/split_files/loras/ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors
-Comfy-Org/ltx-2/split_files/loras/gemma-3-12b-it-abliterated_lora_rank64_bf16.safetensors
-Comfy-Org/ltx-2/split_files/text_encoders/gemma_3_12B_it_fp4_mixed.safetensors
+BennyDaBall/LTX-2.5-22b-distilled-nvfp4-comfy/ltx-2.5-22b-distilled-transformer-nvfp4-comfy.safetensors
+Lightricks/LTX-2.5/text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors
+Lightricks/LTX-2.5/vae/ltx-2.5-video-vae-conv-bf16.safetensors
+Lightricks/LTX-2.5/vae/ltx-2.5-audio-vae-bf16.safetensors
+Lightricks/LTX-2.5/latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors
+Comfy-Org/gemma-4/text_encoders/gemma4_e2b_it_bf16.safetensors
 ```
 
-The script moves files downloaded under `split_files/...` into the flat Comfy folders required by the payload.
+If ComfyUI raises `mat1 and mat2 shapes cannot be multiplied`, verify that the Benny file was used and the download script reports exactly 1,176 `.comfy_quant` markers.
 
 ### LTX models downloaded but Comfy still cannot find them
 
@@ -591,7 +566,8 @@ The final production style includes:
 
 - GPT Image: `gpt-image-2`, `1536x864`, `quality=low`, `n=1`.
 - Request pacing: max `15` concurrent, new request every `4s`.
-- LTX I2V: request `1920x1080`, `25fps`, duration `ceil(end-start)`.
+- LTX 2.5 I2V production source: `0.9 MP`, 16:9, `25fps`, duration `ceil(end-start)`, prompt enhancer off.
+- FFmpeg fits the LTX source into the final `1920x1080` canvas without stretching, deliberately padding the small aspect-ratio difference with thin black bars above and below.
 - FFmpeg render output: `1920x1080`, `25fps`, `h264_nvenc`.
 - Shot timing uses absolute frame boundaries: `round(start * 25)` to
   `round(end * 25)`. Never round each shot duration independently.
