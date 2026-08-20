@@ -55,7 +55,8 @@ from safetensors import safe_open
 comfy = Path(os.environ["COMFY"])
 manifest = json.loads(Path(os.environ["MANIFEST"]).read_text())
 for model in manifest["models_referenced_by_payload"]:
-    path = comfy / model["target_dir_hint"].split("ComfyUI/models/", 1)[1] / model["filename"]
+    model_subdir = model["target_dir_hint"].split("ComfyUI/models/", 1)[1]
+    path = comfy / "models" / model_subdir / model["filename"]
     actual = path.stat().st_size if path.exists() else -1
     expected = model["expected_bytes"]
     if actual != expected:
