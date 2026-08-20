@@ -17,7 +17,7 @@
     },
     {
       "filename": "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
-      "expected_bytes": 15372971786,
+      "expected_bytes": 15372969374,
       "hf_repo": "Lightricks/LTX-2.5",
       "hf_path": "text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
       "target_dir_hint": "ComfyUI/models/text_encoders",
