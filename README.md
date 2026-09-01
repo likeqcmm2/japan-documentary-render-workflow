@@ -1,29 +1,29 @@
 # Japan Documentary Render Workflow
 
-Production workflow to render a documentary-style YouTube video from a shot-list JSON, voice-over audio, and SRT subtitles.
+Production workflow to render a documentary-style YouTube video from a shot-list JSON and voice-over audio.
 
 This repo packages the exact pipeline used for the production render:
 
 1. Generate one image per JSON shot with OpenAI `gpt-image-2`.
 2. For shots where `media_type` is `video`, run LTX 2.5 Image-to-Video using Benny NVFP4 and the Conv VAE in ComfyUI.
 3. Quantize the absolute JSON timeline once at 25 fps and render every shot to its assigned frame interval.
-4. Apply per-shot Ken Burns, grain, vignette, typing overlays, and selective hard subtitles to video-only clips.
+4. Apply per-shot Ken Burns, grain, vignette, and typing overlays to video-only clips.
 5. Concatenate the frame-locked clips, mix typing sounds globally with voice-over, verify zero frame drift, and upload with rclone.
 
-The render stage defaults to the optimized renderer: hardsubs are burned during the
-main clip encode, static-hold photos use a direct centered crop, and six clips render
+The render stage defaults to the optimized renderer: static-hold photos use a direct
+centered crop, and six clips render
 concurrently. The encoder settings remain `h264_nvenc`, `CQ 20`, `1920x1080`, and
 `25 fps`. The optimized renderer keeps separate resumable caches under
 `<project>/render_optimized`.
 
-The repo is intended for a future Codex session: clone it on a new Vast ComfyUI server, provide the input JSON/audio/SRT and local secrets, then run the workflow to produce a Drive link.
+The repo is intended for a future Codex session: clone it on a new Vast ComfyUI server, provide the input JSON/audio and local secrets, then run the workflow to produce a Drive link.
 
 ## Render Speed And Fallback
 
 `scripts/run_full_pipeline.sh` uses optimized rendering by default:
 
 ```bash
-RENDER_MODE=optimized RENDER_WORKERS=6 bash scripts/run_full_pipeline.sh shot.json voice.wav subtitles.srt
+RENDER_MODE=optimized RENDER_WORKERS=6 bash scripts/run_full_pipeline.sh shot.json voice.wav
 ```
 
 `RENDER_WORKERS=6` is the tested default for the 64-core/128-thread RTX 5090 setup. The optimized renderer
@@ -34,7 +34,7 @@ I/O can compete and reduce reliability.
 For a legacy comparison or emergency fallback, run:
 
 ```bash
-RENDER_MODE=legacy bash scripts/run_full_pipeline.sh shot.json voice.wav subtitles.srt
+RENDER_MODE=legacy bash scripts/run_full_pipeline.sh shot.json voice.wav
 ```
 
 On the Edo benchmark with 206 shots, the legacy render took 33m 36.6s and the
@@ -86,14 +86,12 @@ Each production run needs:
 
 - A shot-list JSON file. The filename can be anything.
 - A voice-over file, usually `.wav`.
-- An SRT subtitle file. The filename can be anything.
 
 The scripts normalize these into:
 
 ```text
 /workspace/japan_project/inputs/shot_list.json
 /workspace/japan_project/inputs/voice.wav
-/workspace/japan_project/inputs/subtitles.srt
 ```
 
 ## JSON Contract
@@ -115,14 +113,13 @@ Each shot should look like this shape:
     "film_grain": "light",
     "vignette": true,
     "text_overlay_ja": "Text shown by renderer with typing effect, or null.",
-    "motion_prompt": "Prompt for LTX if media_type is video.",
-    "hardsub": "normal"
+    "motion_prompt": "Prompt for LTX if media_type is video."
   }
 }
 ```
 
 `id` is source metadata and may be either a single number or a comma-separated
-group of original narration/SRT IDs:
+group of original narration IDs:
 
 ```json
 {
@@ -138,11 +135,11 @@ in the JSON array. All reusable asset names use that runtime order:
 ```text
 generated_images/shot_001.png
 ltx_videos/shot_001.mp4
-render_optimized/clips_final_hardsub_frame_locked/clip_001.mp4
+render_optimized/clips_final_frame_locked/clip_001.mp4
 ```
 
-The original `id` is preserved in logs as `source_id`. Never derive asset names,
-render order, or subtitle behavior from a comma-separated source ID. JSON array
+The original `id` is preserved in logs as `source_id`. Never derive asset names or
+render order from a comma-separated source ID. JSON array
 order is the production timeline.
 
 Field behavior:
@@ -152,12 +149,8 @@ Field behavior:
 - `shot`: base prompt for GPT Image.
 - `on_screen_text_ja`: appended to `shot` when generating the still image. It is **not** overlaid by FFmpeg.
 - `edit.text_overlay_ja`: rendered by FFmpeg/Pillow as a compact archival-paper plate in upper-left with Yuji Boku font and typing effect. The complete plate treatment (canvas, text, padding, border, and shadow) is scaled to 70% of the original production size; change `ARCHIVAL_OVERLAY_SCALE` in `scripts/render_final_video.py` only if a different global size is needed.
-- `edit.hardsub: "normal"`: burn every SRT entry whose time range overlaps this
-  shot's `start -> end` range. A grouped shot may therefore contain multiple SRT
-  entries; each entry is shifted to shot-local time before FFmpeg burns it.
-- `edit.hardsub: null`: do not create a local subtitle file for this shot. This
-  suppresses every SRT entry covered by the grouped shot, regardless of how many
-  source IDs appear in `id`.
+- Legacy `edit.hardsub` values are ignored. The workflow does not accept an SRT or
+  burn subtitles into the video.
 - `edit.kenburns_type: "none"` or `"static_hold"`: no animated Ken Burns movement.
 - LTX production sources default to `0.9 MP`, 16:9 (observed as `1280x704`). The final renderer fits them into a `1920x1080` canvas while preserving aspect ratio and deliberately retains the resulting thin black bars above and below.
 
@@ -229,7 +222,7 @@ scripts/setup_vast.sh
 
 `setup_vast.sh` installs required Python packages, Node/npm if the Vast template is missing them, and the repo's npm dependency for OpenAI image generation.
 
-It also installs `fonts-noto-cjk` when Japanese subtitle fonts are missing. Without this package, SRT hardsubs may render as square boxes.
+It also installs `fonts-noto-cjk` as a fallback for Japanese text overlays.
 
 Then create local secrets on Vast:
 
@@ -278,7 +271,7 @@ Put input files anywhere on the Vast server, then run:
 
 ```bash
 PROJECT=/workspace/japan_project \
-scripts/run_full_pipeline.sh /path/to/shot_list.json /path/to/voice.wav /path/to/subtitles.srt
+scripts/run_full_pipeline.sh /path/to/shot_list.json /path/to/voice.wav
 ```
 
 This does:
@@ -317,8 +310,7 @@ python3 scripts/run_ltx_videos.py \
 python3 scripts/validate_project.py \
   --project /workspace/japan_project \
   --input-json /workspace/japan_project/inputs/shot_list.json \
-  --voice /workspace/japan_project/inputs/voice.wav \
-  --srt /workspace/japan_project/inputs/subtitles.srt
+  --voice /workspace/japan_project/inputs/voice.wav
 ```
 
 5. Renders final:
@@ -330,7 +322,6 @@ python3 scripts/render_final_video.py \
   --images-dir /workspace/japan_project/generated_images \
   --ltx-dir /workspace/japan_project/ltx_videos \
   --voice /workspace/japan_project/inputs/voice.wav \
-  --srt /workspace/japan_project/inputs/subtitles.srt \
   --output /workspace/japan_project/final/final_video.mp4
 ```
 
@@ -398,7 +389,6 @@ python3 scripts/render_final_video.py \
   --images-dir /workspace/japan_project/generated_images_smoke \
   --ltx-dir /workspace/japan_project/ltx_videos_smoke \
   --voice /workspace/japan_project/inputs/voice.wav \
-  --srt /workspace/japan_project/inputs/subtitles.srt \
   --output /workspace/japan_project/final/smoke_first4.mp4
 ```
 
@@ -428,7 +418,7 @@ The scripts are intentionally resumable:
 - Image generation skips existing `generated_images/shot_###.png` unless `--force` is passed. `###` is the one-based runtime position in JSON, not the source `id`.
 - Image generation records failures, completes the first pass, retries only failed images for 3 rounds, and pauses the workflow with `failed-images.json` if any remain unsuccessful.
 - LTX skips existing `ltx_videos/shot_###.mp4`.
-- Final render skips an existing `clips_final_hardsub_frame_locked/clip_###.mp4`
+- Final render skips an existing `clips_final_frame_locked/clip_###.mp4`
   only after ffprobe confirms the expected frame count, 25 fps, and no audio stream.
 
 If ComfyUI resets or a network connection drops, restart the same command. Already completed files should be skipped.
@@ -471,7 +461,7 @@ Fix:
 
 `setup_vast.sh` now installs `nodejs npm` with apt if the Vast template is missing Node. OpenAI image generation requires Node.
 
-### Japanese subtitles render as square boxes
+### Japanese text overlays render as square boxes
 
 Symptom:
 
@@ -479,7 +469,7 @@ Symptom:
 □□□□□□
 ```
 
-Cause: the new Vast template does not have `fonts-noto-cjk`; FFmpeg falls back to DejaVu Sans, which lacks Japanese glyphs.
+Cause: the new Vast template does not have `fonts-noto-cjk`, so Japanese overlay text may fall back to a font without Japanese glyphs.
 
 Fix:
 
@@ -580,8 +570,8 @@ The final production style includes:
 - If a new Vast template reports `h264_nvenc` / `OpenEncodeSessionEx failed` / `unsupported device`, `render_final_video.py` automatically retries that FFmpeg command with `libx264`.
 - Photo Ken Burns uses high-resolution intermediate scaling (`scale=8000`) before `zoompan` to avoid jerky motion.
 - Real grain asset from `assets/grain.mp4`, not synthetic FFmpeg noise.
-- `text_overlay_ja`: upper-left archival-paper plate at 70% scale, Yuji Boku font, typing animation, typing sound trimmed to the typing duration. This setting does not affect YouTube-style SRT subtitles.
-- SRT hardsub: YouTube-style small subtitle at bottom, only for shots with `edit.hardsub: "normal"`. Grouped shots use time overlap, so `normal` includes all covered SRT entries and `null` suppresses all of them.
+- `text_overlay_ja`: upper-left archival-paper plate at 70% scale, Yuji Boku font, typing animation, and typing sound trimmed to the typing duration.
+- SRT input and subtitle burning are intentionally unsupported. Legacy `edit.hardsub` fields are ignored.
 
 ## Final QA Checklist
 
@@ -614,8 +604,7 @@ ffmpeg -y -ss 8 -i /workspace/japan_project/final/final_video.mp4 -frames:v 1 /w
 
 Check:
 
-- A shot with `hardsub: null` has no bottom subtitle.
-- A shot with `hardsub: normal` has bottom subtitle.
+- No bottom subtitles are burned into any shot.
 - `text_overlay_ja` appears as archival-paper plate, not black box.
 - Voice-over is present.
 

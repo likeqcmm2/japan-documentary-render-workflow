@@ -10,18 +10,17 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Render final documentary video from shot JSON, generated images, LTX videos, WAV, and SRT.")
+    parser = argparse.ArgumentParser(description="Render final documentary video from shot JSON, generated images, LTX videos, and voice-over audio.")
     parser.add_argument("--project", default="/workspace/japan_project")
     parser.add_argument("--input-json", default=None, help="Shot list JSON. Defaults to <project>/inputs/shot_list.json.")
     parser.add_argument("--images-dir", default=None, help="GPT Image output directory. Defaults to <project>/generated_images.")
     parser.add_argument("--ltx-dir", default=None, help="LTX video directory. Defaults to <project>/ltx_videos.")
     parser.add_argument("--voice", required=True, help="Voice-over WAV/MP3 path.")
-    parser.add_argument("--srt", required=True, help="Subtitle SRT path.")
     parser.add_argument("--output", default=None, help="Final MP4 path. Defaults to <project>/final/final_video.mp4.")
     parser.add_argument("--width", type=int, default=1920)
     parser.add_argument("--height", type=int, default=1080)
     parser.add_argument("--fps", type=int, default=25)
-    parser.add_argument("--optimized", action="store_true", help="Use one-pass subtitles, static-hold fast path, and bounded parallel rendering.")
+    parser.add_argument("--optimized", action="store_true", help="Use the static-hold fast path and bounded parallel rendering.")
     parser.add_argument("--workers", type=int, default=6, help="Concurrent optimized clip renders (default: 6).")
     parser.add_argument("--render-root", default=None, help="Optional directory for optimized render caches and intermediate files.")
     return parser.parse_args()
@@ -35,11 +34,11 @@ ITEMS = json.loads(INPUT_JSON.read_text())
 for runtime_id, item in enumerate(ITEMS, 1):
     item["_runtime_id"] = runtime_id
 RENDER_ROOT = Path(args.render_root) if args.render_root else PROJECT
-CLIP_DIR = RENDER_ROOT / "clips_final_hardsub_frame_locked"
+CLIP_DIR = RENDER_ROOT / "clips_final_frame_locked"
 BASE_CLIP_DIR = RENDER_ROOT / "clips_final_base"
 FINAL_DIR = PROJECT / "final"
 OVERLAY_DIR = RENDER_ROOT / "typing_overlays_final_archival"
-TMP_DIR = RENDER_ROOT / "tmp_final_hardsub"
+TMP_DIR = RENDER_ROOT / "tmp_final"
 for folder in (CLIP_DIR, BASE_CLIP_DIR, FINAL_DIR, OVERLAY_DIR, TMP_DIR):
     folder.mkdir(parents=True, exist_ok=True)
 
@@ -50,7 +49,6 @@ YUJI_BOKU_FONT_FILE = str(PROJECT / "assets" / "YujiBoku-Regular.ttf")
 GRAIN = PROJECT / "assets" / "grain.mp4"
 TYPE_SFX = PROJECT / "assets" / "keyboard-typing-sound-effect-335503.mp3"
 VOICE = Path(args.voice)
-SRT = Path(args.srt)
 GRAIN_OPACITY = {"light": 0.055, "medium": 0.095, "heavy": 0.14}
 ARCHIVAL_OVERLAY_SCALE = 0.70
 
@@ -243,10 +241,6 @@ def static_photo_filter():
     )
 
 
-def esc_path(path):
-    return str(path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
-
-
 def write_textfile(item, text, kind):
     path = TMP_DIR / f"text_{runtime_id(item):03d}_{kind}.txt"
     path.write_text(text, encoding="utf-8")
@@ -356,83 +350,6 @@ def create_typing_overlay(item, clip_duration):
     return output, typing_duration
 
 
-def parse_srt_time(value):
-    h, m, rest = value.strip().replace(",", ".").split(":")
-    return int(h) * 3600 + int(m) * 60 + float(rest)
-
-
-def fmt_srt_time(sec):
-    sec = max(0, sec)
-    h = int(sec // 3600)
-    m = int((sec % 3600) // 60)
-    s = sec - h * 3600 - m * 60
-    return f"{h:02d}:{m:02d}:{s:06.3f}".replace(".", ",")
-
-
-def wrap_japanese_sub(text, max_chars=23):
-    text = "".join(line.strip() for line in text.splitlines())
-    lines, cur = [], ""
-    for ch in text:
-        cur += ch
-        if len(cur) >= max_chars and ch in "、。！？｣」）)":
-            lines.append(cur)
-            cur = ""
-        elif len(cur) >= max_chars + 6:
-            lines.append(cur)
-            cur = ""
-    if cur:
-        lines.append(cur)
-    return "\n".join(lines[:2]) if len(lines) <= 2 else "\n".join([lines[0], "".join(lines[1:])])
-
-
-def load_srt_entries():
-    raw = SRT.read_text(encoding="utf-8-sig")
-    blocks = re.split(r"\n\s*\n", raw.strip())
-    entries = []
-    for block in blocks:
-        lines = [x.rstrip() for x in block.splitlines() if x.strip()]
-        if len(lines) < 2:
-            continue
-        time_line = next((x for x in lines if "-->" in x), None)
-        if not time_line:
-            continue
-        idx = lines.index(time_line)
-        a, b = [x.strip() for x in time_line.split("-->", 1)]
-        text = "\n".join(lines[idx + 1:])
-        entries.append((parse_srt_time(a), parse_srt_time(b), text))
-    return entries
-
-
-SRT_ENTRIES = load_srt_entries() if SRT.exists() else []
-SUBTITLE_STYLE = (
-    r"FontName=Noto Sans CJK JP\,FontSize=16\,PrimaryColour=&H00FFFFFF\,"
-    r"BackColour=&H99000000\,BorderStyle=4\,Outline=0\,Shadow=0\,"
-    r"Alignment=2\,MarginL=35\,MarginR=35\,MarginV=32"
-)
-
-
-def write_local_srt(item):
-    if (item.get("edit") or {}).get("hardsub") != "normal":
-        return None
-    sid = runtime_id(item)
-    start, end = float(item["start"]), float(item["end"])
-    rows = []
-    # A shot may group several source/SRT IDs, so subtitle membership is based
-    # only on timeline overlap with the shot boundaries.
-    for s, e, text in SRT_ENTRIES:
-        ls = max(s, start) - start
-        le = min(e, end) - start
-        if le - ls > 0.02:
-            rows.append((ls, le, wrap_japanese_sub(text)))
-    if not rows:
-        return None
-    path = TMP_DIR / f"shot_{sid:03d}_subs.srt"
-    body = []
-    for i, (s, e, text) in enumerate(rows, 1):
-        body.append(f"{i}\n{fmt_srt_time(s)} --> {fmt_srt_time(e)}\n{text}\n")
-    path.write_text("\n".join(body), encoding="utf-8")
-    return path
-
 def render_clip(item):
     output = clip_path(item)
     base_output = BASE_CLIP_DIR / f"{clip_label(item)}_base.mp4"
@@ -520,7 +437,7 @@ def render_clip(item):
         str(base_output),
     ]
     print(
-        f"[render] {clip_label(item)} source_id={item.get('id')} {media} {d:.3f}s grain={grain} typing={typing} hardsub={(item.get('edit') or {}).get('hardsub')}",
+        f"[render] {clip_label(item)} source_id={item.get('id')} {media} {d:.3f}s grain={grain} typing={typing}",
         flush=True,
     )
     result = run_ffmpeg(cmd, clip_label(item))
@@ -528,20 +445,7 @@ def render_clip(item):
         print(result.stdout[-4000:], flush=True)
         raise RuntimeError(f"ffmpeg failed for {clip_label(item)}")
 
-    local_srt = write_local_srt(item)
-    if local_srt:
-        sub_cmd = [
-            "ffmpeg", "-hide_banner", "-y", "-i", str(base_output),
-            "-vf", f"subtitles='{esc_path(local_srt)}':fontsdir='/usr/share/fonts/opentype/noto':force_style={SUBTITLE_STYLE}",
-            "-c:v", "h264_nvenc", "-preset", "p4", "-cq", "20", "-pix_fmt", "yuv420p",
-            "-r", str(FPS), "-frames:v", str(frames), "-an", "-movflags", "+faststart", str(output),
-        ]
-        result = run_ffmpeg(sub_cmd, f"{clip_label(item)}_subtitles")
-        if result.returncode != 0:
-            print(result.stdout[-4000:], flush=True)
-            raise RuntimeError(f"subtitle burn failed for {clip_label(item)}")
-    else:
-        shutil.copy2(base_output, output)
+    shutil.copy2(base_output, output)
 
 
 def render_clip_optimized(item):
@@ -561,7 +465,6 @@ def render_clip_optimized(item):
     grain = edit.get("film_grain") or "none"
     typing_overlay, typing_duration = create_typing_overlay(item, d)
     typing = typing_overlay is not None
-    local_srt = write_local_srt(item)
 
     cmd = ["ffmpeg", "-hide_banner", "-y"]
     if media == "video":
@@ -610,14 +513,6 @@ def render_clip_optimized(item):
         filters.append(f"[{current}][tov]overlay=80:90:eof_action=pass[vtyped]")
         current = "vtyped"
 
-    # Burn subtitles in the same encode as the visual treatment.
-    if local_srt:
-        filters.append(
-            f"[{current}]subtitles='{esc_path(local_srt)}':fontsdir='/usr/share/fonts/opentype/noto':"
-            f"force_style={SUBTITLE_STYLE}[vsub]"
-        )
-        current = "vsub"
-
     filters.append(f"[{current}]trim=end_frame={frames},setpts=PTS-STARTPTS[vout]")
 
     cmd += [
@@ -629,7 +524,7 @@ def render_clip_optimized(item):
         str(output),
     ]
     print(
-        f"[render-optimized] {clip_label(item)} source_id={item.get('id')} {media} {d:.3f}s grain={grain} typing={typing} hardsub={(item.get('edit') or {}).get('hardsub')}",
+        f"[render-optimized] {clip_label(item)} source_id={item.get('id')} {media} {d:.3f}s grain={grain} typing={typing}",
         flush=True,
     )
     result = run_ffmpeg(cmd, f"optimized_{clip_label(item)}")
@@ -668,7 +563,7 @@ print(f"[frame-qc] clips={len(ITEMS)} total_frames={actual_clip_frames} fps={FPS
 concat = TMP_DIR / "concat_list_final.txt"
 concat.write_text("".join(f"file '{clip_path(item)}'\n" for item in ITEMS), encoding="utf-8")
 
-visual = RENDER_ROOT / "japan_project_visual_timeline_final_hardsub.mp4"
+visual = RENDER_ROOT / "japan_project_visual_timeline_final.mp4"
 cmd = [
     "ffmpeg",
     "-hide_banner",

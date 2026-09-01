@@ -4,9 +4,8 @@ set -euo pipefail
 PROJECT="${PROJECT:-/workspace/japan_project}"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-SHOT_JSON="${1:?Usage: scripts/run_full_pipeline.sh shot_list.json voice.wav subtitles.srt}"
-VOICE="${2:?Usage: scripts/run_full_pipeline.sh shot_list.json voice.wav subtitles.srt}"
-SRT="${3:?Usage: scripts/run_full_pipeline.sh shot_list.json voice.wav subtitles.srt}"
+SHOT_JSON="${1:?Usage: scripts/run_full_pipeline.sh shot_list.json voice.wav}"
+VOICE="${2:?Usage: scripts/run_full_pipeline.sh shot_list.json voice.wav}"
 
 mkdir -p "$PROJECT/inputs" "$PROJECT/comfy_workflows" "$PROJECT/assets"
 cp "$REPO_DIR/comfy_workflows/ltx-2.5-nvfp4-i2v.payload.json" "$PROJECT/comfy_workflows/ltx-2.5-nvfp4-i2v.payload.json"
@@ -20,15 +19,12 @@ from pathlib import Path
 print(Path(sys.argv[1]).suffix)
 PY
 )"
-cp "$SRT" "$PROJECT/inputs/subtitles.srt"
-
 VOICE_IN="$PROJECT/inputs/voice$(python3 - <<'PY' "$VOICE"
 import sys
 from pathlib import Path
 print(Path(sys.argv[1]).suffix)
 PY
 )"
-SRT_IN="$PROJECT/inputs/subtitles.srt"
 RENDER_MODE="${RENDER_MODE:-optimized}"
 RENDER_WORKERS="${RENDER_WORKERS:-6}"
 
@@ -48,7 +44,6 @@ python3 "$REPO_DIR/scripts/validate_project.py" \
   --project "$PROJECT" \
   --input-json "$PROJECT/inputs/shot_list.json" \
   --voice "$VOICE_IN" \
-  --srt "$SRT_IN" \
   --images-dir "$PROJECT/generated_images" \
   --ltx-dir "$PROJECT/ltx_videos"
 
@@ -60,7 +55,6 @@ if [ "$RENDER_MODE" = "legacy" ]; then
     --images-dir "$PROJECT/generated_images" \
     --ltx-dir "$PROJECT/ltx_videos" \
     --voice "$VOICE_IN" \
-    --srt "$SRT_IN" \
     --output "$PROJECT/final/final_video.mp4"
 else
   echo "[render] mode=optimized workers=$RENDER_WORKERS"
@@ -73,7 +67,6 @@ else
     --images-dir "$PROJECT/generated_images" \
     --ltx-dir "$PROJECT/ltx_videos" \
     --voice "$VOICE_IN" \
-    --srt "$SRT_IN" \
     --output "$PROJECT/final/final_video.mp4"
 fi
 
