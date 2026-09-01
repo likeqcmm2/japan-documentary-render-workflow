@@ -46,7 +46,6 @@ def main():
     parser.add_argument("--project", default="/workspace/japan_project")
     parser.add_argument("--input-json", default=None)
     parser.add_argument("--voice", default=None)
-    parser.add_argument("--srt", default=None)
     parser.add_argument("--images-dir", default=None)
     parser.add_argument("--ltx-dir", default=None)
     args = parser.parse_args()
@@ -61,7 +60,6 @@ def main():
     source_ids = [x.get("id", runtime_id) for runtime_id, x in runtime_items]
     print(f"items={len(items)} first_source_id={source_ids[0]} last_source_id={source_ids[-1]}")
     print("media", dict(Counter((x.get("media_type") or "").lower() for x in items)))
-    print("edit.hardsub", dict(Counter(str((x.get("edit") or {}).get("hardsub")) for x in items)))
     print("text_overlay_count", sum(1 for x in items if (x.get("edit") or {}).get("text_overlay_ja")))
     if len({str(x) for x in source_ids}) != len(source_ids):
         raise SystemExit("Duplicate source IDs in shot list")
@@ -95,10 +93,6 @@ def main():
         if duration is not None:
             json_end = float(items[-1]["end"])
             print("json_last_end", json_end, "delta_sec", round(duration - json_end, 3))
-    if args.srt:
-        srt = Path(args.srt)
-        print("srt_exists", srt.exists(), srt, "size", srt.stat().st_size if srt.exists() else None)
-
     if missing_images or missing_ltx or invalid_ltx:
         raise SystemExit(1)
 

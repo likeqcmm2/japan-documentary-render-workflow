@@ -73,4 +73,4 @@ fi
 
 echo "[setup] done"
 echo "[setup] LTX production source: 0.9 MP, 16:9, 25 fps; final renderer: 1920x1080"
-echo "[setup] Next: put shot_list.json, voice.wav, subtitles.srt into $PROJECT/inputs/"
+echo "[setup] Next: put shot_list.json and voice.wav into $PROJECT/inputs/"

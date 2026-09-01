@@ -1,7 +1,7 @@
 [
   {
     "id": 1,
-    "start": 0.0,
+    "start": 0,
     "end": 6.529,
     "text_ja": "豊臣家という一族を根絶やしにした人物と聞いて、皆さんは誰を思い浮かべますか。",
     "era_style": "modern cinematic documentary title card, dark dramatic background",
@@ -16,8 +16,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -37,8 +36,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": "徳川家康",
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -58,8 +56,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -79,8 +76,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Formal samurai wedding procession slowly advancing through a castle courtyard; attendants and the bride walk forward at a slow, dignified pace; fabric and banners gently sway; subtle camera drift following the procession.",
-      "hardsub": "normal"
+      "motion_prompt": "Formal samurai wedding procession slowly advancing through a castle courtyard; attendants and the bride walk forward at a slow, dignified pace; fabric and banners gently sway; subtle camera drift following the procession."
     }
   },
   {
@@ -100,8 +96,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -121,8 +116,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": "方広寺の梵鐘",
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -142,8 +136,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": "それは、すべての真実なのか？",
-      "motion_prompt": "Slow, ominous push-in on the silhouette of Osaka Castle's donjon against a deep red dusk sky; faint drifting clouds behind the tower; no characters; very slow, unsettling camera movement.",
-      "hardsub": "normal"
+      "motion_prompt": "Slow, ominous push-in on the silhouette of Osaka Castle's donjon against a deep red dusk sky; faint drifting clouds behind the tower; no characters; very slow, unsettling camera movement."
     }
   },
   {
@@ -163,8 +156,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Chaotic close-quarters samurai combat, smoke and gold-leaf clouds drifting across the scene; weapons clash and figures move rapidly within the frame; fast, urgent motion conveying battlefield chaos.",
-      "hardsub": "normal"
+      "motion_prompt": "Chaotic close-quarters samurai combat, smoke and gold-leaf clouds drifting across the scene; weapons clash and figures move rapidly within the frame; fast, urgent motion conveying battlefield chaos."
     }
   },
   {
@@ -184,8 +176,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -205,8 +196,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": "豊臣秀吉",
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -226,8 +216,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -247,8 +236,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": "1598年（慶長3年） 秀吉、死去",
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -268,8 +256,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -289,8 +276,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": "前田利家",
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -310,8 +296,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Massed samurai armies clashing at the Battle of Sekigahara; banners (nobori) fluttering violently in the wind, smoke drifting across the battlefield, distant figures in dynamic combat motion.",
-      "hardsub": "normal"
+      "motion_prompt": "Massed samurai armies clashing at the Battle of Sekigahara; banners (nobori) fluttering violently in the wind, smoke drifting across the battlefield, distant figures in dynamic combat motion."
     }
   },
   {
@@ -331,8 +316,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": "関ヶ原の戦い　1600年（慶長5年）",
-      "motion_prompt": "Wide shot of two massive armies colliding on the Sekigahara plain; smoke and dust rising, banners rippling in strong wind, a sweeping sense of large-scale movement across the whole frame.",
-      "hardsub": "normal"
+      "motion_prompt": "Wide shot of two massive armies colliding on the Sekigahara plain; smoke and dust rising, banners rippling in strong wind, a sweeping sense of large-scale movement across the whole frame."
     }
   },
   {
@@ -352,8 +336,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -373,8 +356,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -394,8 +376,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -415,8 +396,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -436,8 +416,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -457,8 +436,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -478,8 +456,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": "A learned Buddhist monk seated at a writing desk, brush moving slowly and deliberately across paper as he composes calligraphy; subtle candlelight flicker; no camera movement.",
-      "hardsub": "normal"
+      "motion_prompt": "A learned Buddhist monk seated at a writing desk, brush moving slowly and deliberately across paper as he composes calligraphy; subtle candlelight flicker; no camera movement."
     }
   },
   {
@@ -499,8 +476,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": "林羅山",
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -520,8 +496,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": "本多正信",
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -541,8 +516,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -562,8 +536,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -583,8 +556,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "A bronze Buddha statue slowly collapsing amid earthquake tremors, dust and debris drifting through the air; in a separate panel, faint flames and smoke rise gently from bronze-casting workshop; slow, non-violent disaster motion.",
-      "hardsub": "normal"
+      "motion_prompt": "A bronze Buddha statue slowly collapsing amid earthquake tremors, dust and debris drifting through the air; in a separate panel, faint flames and smoke rise gently from bronze-casting workshop; slow, non-violent disaster motion."
     }
   },
   {
@@ -604,8 +576,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Toyotomi Hideyori's hand slowly moving over construction scroll plans on a low table; candlelight flickers softly; fabric of his robe faintly stirs; minimal, contemplative motion.",
-      "hardsub": "normal"
+      "motion_prompt": "Toyotomi Hideyori's hand slowly moving over construction scroll plans on a low table; candlelight flickers softly; fabric of his robe faintly stirs; minimal, contemplative motion."
     }
   },
   {
@@ -625,8 +596,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -646,8 +616,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -667,8 +636,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": "徳川秀忠",
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -688,8 +656,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -709,8 +676,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -730,8 +696,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -751,8 +716,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": "徳川家康三方ヶ原戦役画像",
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -772,8 +736,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -793,8 +756,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -814,8 +776,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": "Present-day Osaka Castle's main keep under a clear sky; clouds drift slowly behind the tower; very subtle handheld-style camera drift, documentary establishing-shot feel.",
-      "hardsub": "normal"
+      "motion_prompt": "Present-day Osaka Castle's main keep under a clear sky; clouds drift slowly behind the tower; very subtle handheld-style camera drift, documentary establishing-shot feel."
     }
   },
   {
@@ -835,8 +796,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "A formal samurai wedding procession moving slowly through the inner grounds of Osaka Castle; the young bride and attendants walk forward in measured steps, robes swaying gently.",
-      "hardsub": "normal"
+      "motion_prompt": "A formal samurai wedding procession moving slowly through the inner grounds of Osaka Castle; the young bride and attendants walk forward in measured steps, robes swaying gently."
     }
   },
   {
@@ -856,8 +816,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "A young lord sits passively while an imposing noblewoman gestures instructions to attendants nearby; attendants shift and bow subtly in the background; slow, controlled motion.",
-      "hardsub": "normal"
+      "motion_prompt": "A young lord sits passively while an imposing noblewoman gestures instructions to attendants nearby; attendants shift and bow subtly in the background; slow, controlled motion."
     }
   },
   {
@@ -877,8 +836,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": "豊臣秀頼",
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -898,8 +856,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -919,8 +876,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Yodo-dono seated with a composed, sorrowful expression; her robes and hair faintly stir in a slight indoor draft; distant attendants move quietly in the background; very slow, contemplative motion.",
-      "hardsub": "normal"
+      "motion_prompt": "Yodo-dono seated with a composed, sorrowful expression; her robes and hair faintly stir in a slight indoor draft; distant attendants move quietly in the background; very slow, contemplative motion."
     }
   },
   {
@@ -940,8 +896,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": "北ノ庄城の戦い　1583年",
-      "motion_prompt": "Kitanoshō Castle engulfed in flames at a distance; smoke billows slowly upward into the night sky; embers drift; deliberately distant, non-graphic framing of the fire.",
-      "hardsub": "normal"
+      "motion_prompt": "Kitanoshō Castle engulfed in flames at a distance; smoke billows slowly upward into the night sky; embers drift; deliberately distant, non-graphic framing of the fire."
     }
   },
   {
@@ -961,8 +916,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Yodo-dono seated with composed dignity inside Osaka Castle's grand inner hall; attendants move quietly at the edges of frame; soft ambient candlelight flicker; slow, dignified motion.",
-      "hardsub": "normal"
+      "motion_prompt": "Yodo-dono seated with composed dignity inside Osaka Castle's grand inner hall; attendants move quietly at the edges of frame; soft ambient candlelight flicker; slow, dignified motion."
     }
   },
   {
@@ -982,8 +936,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -1003,8 +956,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -1024,8 +976,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": "片桐且元",
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -1045,8 +996,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Yodo-dono seated with a worried expression, glancing toward a departing figure walking away through a doorway in the background; slow, anxious stillness with minimal figure movement.",
-      "hardsub": "normal"
+      "motion_prompt": "Yodo-dono seated with a worried expression, glancing toward a departing figure walking away through a doorway in the background; slow, anxious stillness with minimal figure movement."
     }
   },
   {
@@ -1066,8 +1016,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": "Nijō Castle's exterior gate and stone walls; the moat water gently ripples, tree branches sway faintly in the breeze; slow, steady documentary camera drift.",
-      "hardsub": "normal"
+      "motion_prompt": "Nijō Castle's exterior gate and stone walls; the moat water gently ripples, tree branches sway faintly in the breeze; slow, steady documentary camera drift."
     }
   },
   {
@@ -1087,8 +1036,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": "The Ninomaru Palace reception hall interior; sunlight filtering through the sliding doors shifts subtly; dust motes drift faintly in the light beams; near-static, reverent camera hold with minimal drift.",
-      "hardsub": "normal"
+      "motion_prompt": "The Ninomaru Palace reception hall interior; sunlight filtering through the sliding doors shifts subtly; dust motes drift faintly in the light beams; near-static, reverent camera hold with minimal drift."
     }
   },
   {
@@ -1108,8 +1056,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": "秀頼　身長約197cm・体重約161kg",
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -1129,8 +1076,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "A young lord seated before a writing table, brush moving slowly across a poetry scroll; pages of a book faintly ruffle; calm, scholarly motion.",
-      "hardsub": "normal"
+      "motion_prompt": "A young lord seated before a writing table, brush moving slowly across a poetry scroll; pages of a book faintly ruffle; calm, scholarly motion."
     }
   },
   {
@@ -1150,8 +1096,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Two seated samurai lords facing each other in a formal audience hall; Ieyasu's expression subtly shifts from composure to visible surprise as he studies the young lord before him; minimal but telling motion.",
-      "hardsub": "normal"
+      "motion_prompt": "Two seated samurai lords facing each other in a formal audience hall; Ieyasu's expression subtly shifts from composure to visible surprise as he studies the young lord before him; minimal but telling motion."
     }
   },
   {
@@ -1171,8 +1116,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -1192,8 +1136,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -1213,8 +1156,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -1234,8 +1176,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -1255,8 +1196,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -1276,8 +1216,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Samurai retainers seated behind Ieyasu exchange concerned glances with one another; subtle head turns and shifting eyes; restrained, tense motion.",
-      "hardsub": "normal"
+      "motion_prompt": "Samurai retainers seated behind Ieyasu exchange concerned glances with one another; subtle head turns and shifting eyes; restrained, tense motion."
     }
   },
   {
@@ -1297,8 +1236,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -1318,8 +1256,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Nijō Castle's gate at dusk; the camera slowly pulls back, torchlight flickers along the stone walls, a faint evening breeze stirs banners near the gate.",
-      "hardsub": "normal"
+      "motion_prompt": "Nijō Castle's gate at dusk; the camera slowly pulls back, torchlight flickers along the stone walls, a faint evening breeze stirs banners near the gate."
     }
   },
   {
@@ -1339,8 +1276,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "A slow, continuous sequence of four aging samurai lords' portraits, each held briefly with an extremely gentle push-in, then soft cross-dissolve into the next; no character motion, only slow transitional dissolves conveying the passing of a generation.",
-      "hardsub": "normal"
+      "motion_prompt": "A slow, continuous sequence of four aging samurai lords' portraits, each held briefly with an extremely gentle push-in, then soft cross-dissolve into the next; no character motion, only slow transitional dissolves conveying the passing of a generation."
     }
   },
   {
@@ -1360,8 +1296,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -1381,8 +1316,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -1402,8 +1336,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Yodo-dono seated at the head of a council of retainers inside Osaka Castle; retainers around her shift and lean forward attentively as she speaks; her authority visibly commands the room.",
-      "hardsub": "normal"
+      "motion_prompt": "Yodo-dono seated at the head of a council of retainers inside Osaka Castle; retainers around her shift and lean forward attentively as she speaks; her authority visibly commands the room."
     }
   },
   {
@@ -1423,8 +1356,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Groups of masterless samurai (rōnin) in worn armor walking through Osaka Castle's gates, carrying their own weapons; castle officials registering them; steady crowd movement entering the frame.",
-      "hardsub": "normal"
+      "motion_prompt": "Groups of masterless samurai (rōnin) in worn armor walking through Osaka Castle's gates, carrying their own weapons; castle officials registering them; steady crowd movement entering the frame."
     }
   },
   {
@@ -1444,8 +1376,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -1465,8 +1396,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": "秀吉以来の莫大な金銀",
-      "motion_prompt": "Stacks of gold koban coins inside a castle storeroom, catching and glinting under flickering lantern light; extremely subtle shimmer and light movement across the gold surfaces; no camera movement.",
-      "hardsub": "normal"
+      "motion_prompt": "Stacks of gold koban coins inside a castle storeroom, catching and glinting under flickering lantern light; extremely subtle shimmer and light movement across the gold surfaces; no camera movement."
     }
   },
   {
@@ -1486,8 +1416,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Japanese gunsmiths at the Kunitomo foundry hammering and casting bronze cannons, sparks flying faintly; in a separate panel a foreign trading ship rocks gently at anchor, sails faintly rippling.",
-      "hardsub": "normal"
+      "motion_prompt": "Japanese gunsmiths at the Kunitomo foundry hammering and casting bronze cannons, sparks flying faintly; in a separate panel a foreign trading ship rocks gently at anchor, sails faintly rippling."
     }
   },
   {
@@ -1507,8 +1436,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Osaka Castle's silhouette under storm clouds at dusk; the storm clouds roll and shift slowly across the sky, distant lightning flickers faintly, conveying rising tension.",
-      "hardsub": "normal"
+      "motion_prompt": "Osaka Castle's silhouette under storm clouds at dusk; the storm clouds roll and shift slowly across the sky, distant lightning flickers faintly, conveying rising tension."
     }
   },
   {
@@ -1528,8 +1456,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -1549,8 +1476,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": "Present-day Hōkō-ji temple grounds and the site of the former Great Buddha Hall; tree branches sway gently in the wind, soft daylight shifts across the stone foundations.",
-      "hardsub": "normal"
+      "motion_prompt": "Present-day Hōkō-ji temple grounds and the site of the former Great Buddha Hall; tree branches sway gently in the wind, soft daylight shifts across the stone foundations."
     }
   },
   {
@@ -1570,8 +1496,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "The bronze temple bell hanging in its bell tower; the camera drifts slowly upward along the bell's surface; faint ambient light shifts, no wind or bell movement.",
-      "hardsub": "normal"
+      "motion_prompt": "The bronze temple bell hanging in its bell tower; the camera drifts slowly upward along the bell's surface; faint ambient light shifts, no wind or bell movement."
     }
   },
   {
@@ -1591,8 +1516,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -1612,8 +1536,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -1633,8 +1556,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -1654,8 +1576,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Katagiri Katsumoto walking away from Osaka Castle's gate, a disgraced and isolated figure receding into the distance; armed retainers stand motionless behind him; slow, deliberate walking motion.",
-      "hardsub": "normal"
+      "motion_prompt": "Katagiri Katsumoto walking away from Osaka Castle's gate, a disgraced and isolated figure receding into the distance; armed retainers stand motionless behind him; slow, deliberate walking motion."
     }
   },
   {
@@ -1675,8 +1596,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Osaka Castle's stone walls and moat under a tense, overcast sky; storm clouds drift slowly, the moat's surface ripples faintly, conveying the breakdown of negotiations.",
-      "hardsub": "normal"
+      "motion_prompt": "Osaka Castle's stone walls and moat under a tense, overcast sky; storm clouds drift slowly, the moat's surface ripples faintly, conveying the breakdown of negotiations."
     }
   },
   {
@@ -1696,8 +1616,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Tokugawa Ieyasu issuing military mobilization orders to a gathered council of armored daimyo; war banners behind them ripple in the wind; officers bow and turn to depart with urgency.",
-      "hardsub": "normal"
+      "motion_prompt": "Tokugawa Ieyasu issuing military mobilization orders to a gathered council of armored daimyo; war banners behind them ripple in the wind; officers bow and turn to depart with urgency."
     }
   },
   {
@@ -1717,8 +1636,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": "大坂冬の陣　1614年11月",
-      "motion_prompt": "The massed Tokugawa army encircling Osaka Castle; banners flutter across the vast encampment, distant smoke rises from campfires, a sweeping sense of overwhelming numbers surrounding the castle.",
-      "hardsub": "normal"
+      "motion_prompt": "The massed Tokugawa army encircling Osaka Castle; banners flutter across the vast encampment, distant smoke rises from campfires, a sweeping sense of overwhelming numbers surrounding the castle."
     }
   },
   {
@@ -1738,8 +1656,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -1759,8 +1676,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -1780,8 +1696,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -1801,8 +1716,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -1822,8 +1736,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Samurai matchlock gunners firing from the Sanada-maru fortification down onto attacking Tokugawa troops; muzzle flashes and drifting gunsmoke, rapid but non-graphic firing motion.",
-      "hardsub": "normal"
+      "motion_prompt": "Samurai matchlock gunners firing from the Sanada-maru fortification down onto attacking Tokugawa troops; muzzle flashes and drifting gunsmoke, rapid but non-graphic firing motion."
     }
   },
   {
@@ -1843,8 +1756,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": "真田丸　最後まで陥落せず",
-      "motion_prompt": "The Sanada-maru fortification standing firm while surrounding siege lines are in visible disarray; smoke drifts across the distant battlefield, banners atop the fort hold steady against the wind.",
-      "hardsub": "normal"
+      "motion_prompt": "The Sanada-maru fortification standing firm while surrounding siege lines are in visible disarray; smoke drifts across the distant battlefield, banners atop the fort hold steady against the wind."
     }
   },
   {
@@ -1864,8 +1776,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Tokugawa forces firing large cannons at Osaka Castle's keep from a distance; smoke bursts from the cannon barrels and drifts slowly skyward; non-graphic, distant framing.",
-      "hardsub": "normal"
+      "motion_prompt": "Tokugawa forces firing large cannons at Osaka Castle's keep from a distance; smoke bursts from the cannon barrels and drifts slowly skyward; non-graphic, distant framing."
     }
   },
   {
@@ -1885,8 +1796,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Inside Osaka Castle's keep, faint dust and debris drift down from the ceiling as a distant cannonball impact is felt nearby; attendants react with subtle, restrained alarm; very slow, non-violent motion.",
-      "hardsub": "normal"
+      "motion_prompt": "Inside Osaka Castle's keep, faint dust and debris drift down from the ceiling as a distant cannonball impact is felt nearby; attendants react with subtle, restrained alarm; very slow, non-violent motion."
     }
   },
   {
@@ -1906,8 +1816,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -1927,8 +1836,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -1948,8 +1856,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Osaka Castle's stone walls with the moat water visibly low; the shallow remaining water ripples faintly, exposing the vulnerable stonework beneath an overcast sky.",
-      "hardsub": "normal"
+      "motion_prompt": "Osaka Castle's stone walls with the moat water visibly low; the shallow remaining water ripples faintly, exposing the vulnerable stonework beneath an overcast sky."
     }
   },
   {
@@ -1969,8 +1876,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -1990,8 +1896,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -2011,8 +1916,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -2032,8 +1936,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -2053,8 +1956,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -2074,8 +1976,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Sanada Yukimura in red-lacquered armor standing resolute, his six-coin crest banner fluttering behind him in the wind; faint light catches the lacquer of his armor as he shifts his stance.",
-      "hardsub": "normal"
+      "motion_prompt": "Sanada Yukimura in red-lacquered armor standing resolute, his six-coin crest banner fluttering behind him in the wind; faint light catches the lacquer of his armor as he shifts his stance."
     }
   },
   {
@@ -2095,8 +1996,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Fierce close combat at one of the outlying forts around Osaka Castle; smoke and chaos swirl through the frame, distant figures clash rapidly, conveying the intensity of the fighting.",
-      "hardsub": "normal"
+      "motion_prompt": "Fierce close combat at one of the outlying forts around Osaka Castle; smoke and chaos swirl through the frame, distant figures clash rapidly, conveying the intensity of the fighting."
     }
   },
   {
@@ -2116,8 +2016,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -2137,8 +2036,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -2158,8 +2056,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -2179,8 +2076,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": "大坂夏の陣　1615年（慶長20年）",
-      "motion_prompt": "Wide establishing shot of massed armies approaching Osaka Castle under a tense sky; banners ripple across the battlefield, smoke drifts in the distance, castle visible in the background.",
-      "hardsub": "normal"
+      "motion_prompt": "Wide establishing shot of massed armies approaching Osaka Castle under a tense sky; banners ripple across the battlefield, smoke drifts in the distance, castle visible in the background."
     }
   },
   {
@@ -2200,8 +2096,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "The overwhelming scale of Tokugawa forces compared to the smaller Toyotomi ranks; countless banners flutter across a vast battlefield, dust rises from marching troops.",
-      "hardsub": "normal"
+      "motion_prompt": "The overwhelming scale of Tokugawa forces compared to the smaller Toyotomi ranks; countless banners flutter across a vast battlefield, dust rises from marching troops."
     }
   },
   {
@@ -2221,8 +2116,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Toyotomi rōnin-samurai charging forward with resolute, desperate expressions; smoke and dust kick up around their feet as they surge across the battlefield.",
-      "hardsub": "normal"
+      "motion_prompt": "Toyotomi rōnin-samurai charging forward with resolute, desperate expressions; smoke and dust kick up around their feet as they surge across the battlefield."
     }
   },
   {
@@ -2242,8 +2136,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": "天王寺口・岡山口",
-      "motion_prompt": "Two battle lines clashing at Tennōji-guchi and Okayama-guchi; banners and weapons clash rapidly, smoke rises across the collision point of the two armies.",
-      "hardsub": "normal"
+      "motion_prompt": "Two battle lines clashing at Tennōji-guchi and Okayama-guchi; banners and weapons clash rapidly, smoke rises across the collision point of the two armies."
     }
   },
   {
@@ -2263,8 +2156,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Sanada Yukimura's cavalry charging directly toward the Tokugawa command banners; horses gallop rapidly across the battlefield, dust and smoke trailing behind the charge.",
-      "hardsub": "normal"
+      "motion_prompt": "Sanada Yukimura's cavalry charging directly toward the Tokugawa command banners; horses gallop rapidly across the battlefield, dust and smoke trailing behind the charge."
     }
   },
   {
@@ -2284,8 +2176,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "The Tokugawa command post in visible disarray; banners fall, soldiers scatter rapidly in chaotic retreat, smoke drifts across the collapsing formation.",
-      "hardsub": "normal"
+      "motion_prompt": "The Tokugawa command post in visible disarray; banners fall, soldiers scatter rapidly in chaotic retreat, smoke drifts across the collapsing formation."
     }
   },
   {
@@ -2305,8 +2196,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": "家康、自害を覚悟",
-      "motion_prompt": "The Tokugawa command banner (uma-jirushi) toppling amid chaos; mounted samurai flee rapidly in disarray around it, dust and smoke swirling through the frame.",
-      "hardsub": "normal"
+      "motion_prompt": "The Tokugawa command banner (uma-jirushi) toppling amid chaos; mounted samurai flee rapidly in disarray around it, dust and smoke swirling through the frame."
     }
   },
   {
@@ -2326,8 +2216,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -2347,8 +2236,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -2368,8 +2256,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Sanada Yukimura's final stand shown at a respectful distance; fallen banners lie still, exhausted samurai move slowly, smoke drifts gently across the scene; deliberately slow, non-graphic motion.",
-      "hardsub": "normal"
+      "motion_prompt": "Sanada Yukimura's final stand shown at a respectful distance; fallen banners lie still, exhausted samurai move slowly, smoke drifts gently across the scene; deliberately slow, non-graphic motion."
     }
   },
   {
@@ -2389,8 +2276,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Sanada Yukimura in red-lacquered armor standing resolute on a distant battlefield ridge; his banner flutters steadily in the wind, honoring his legendary reputation.",
-      "hardsub": "normal"
+      "motion_prompt": "Sanada Yukimura in red-lacquered armor standing resolute on a distant battlefield ridge; his banner flutters steadily in the wind, honoring his legendary reputation."
     }
   },
   {
@@ -2410,8 +2296,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Osaka Castle's keep engulfed in flames and smoke, viewed from a distance; flames flicker and smoke billows slowly skyward; deliberately slow, awe-struck, non-graphic wide framing.",
-      "hardsub": "normal"
+      "motion_prompt": "Osaka Castle's keep engulfed in flames and smoke, viewed from a distance; flames flicker and smoke billows slowly skyward; deliberately slow, awe-struck, non-graphic wide framing."
     }
   },
   {
@@ -2431,8 +2316,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Senhime being escorted quickly out of the burning castle by Tokugawa retainers; her robes flutter as she moves, retainers guide her forward with urgency but care.",
-      "hardsub": "normal"
+      "motion_prompt": "Senhime being escorted quickly out of the burning castle by Tokugawa retainers; her robes flutter as she moves, retainers guide her forward with urgency but care."
     }
   },
   {
@@ -2452,8 +2336,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Osaka Castle's inner keep enveloped in smoke and fire, viewed from far outside the walls; smoke drifts extremely slowly and gently skyward; deliberately distant, respectful, non-violent framing representing loss of life without depicting it directly.",
-      "hardsub": "normal"
+      "motion_prompt": "Osaka Castle's inner keep enveloped in smoke and fire, viewed from far outside the walls; smoke drifts extremely slowly and gently skyward; deliberately distant, respectful, non-violent framing representing loss of life without depicting it directly."
     }
   },
   {
@@ -2473,8 +2356,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -2494,8 +2376,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -2515,8 +2396,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -2536,8 +2416,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": "国松（8歳）",
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -2557,8 +2436,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -2578,8 +2456,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -2599,8 +2476,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -2620,8 +2496,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -2641,8 +2516,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -2662,8 +2536,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -2683,8 +2556,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": "六条河原",
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -2704,8 +2576,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": "『梵舜日記』",
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -2725,8 +2596,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Hosokawa Tadaoki in formal samurai dress, a faint breeze stirring the edge of his robe and the banner visible behind him; his dignified, aged expression remains still; minimal, respectful motion.",
-      "hardsub": "normal"
+      "motion_prompt": "Hosokawa Tadaoki in formal samurai dress, a faint breeze stirring the edge of his robe and the banner visible behind him; his dignified, aged expression remains still; minimal, respectful motion."
     }
   },
   {
@@ -2746,8 +2616,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -2767,8 +2636,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -2788,8 +2656,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": "奈阿姫（天秀尼）",
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -2809,8 +2676,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Senhime kneeling and pleading before Tokugawa officials on behalf of a young girl standing nearby; her hands and posture convey urgent emotion, officials shift slightly in response; slow, dignified motion.",
-      "hardsub": "normal"
+      "motion_prompt": "Senhime kneeling and pleading before Tokugawa officials on behalf of a young girl standing nearby; her hands and posture convey urgent emotion, officials shift slightly in response; slow, dignified motion."
     }
   },
   {
@@ -2830,8 +2696,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": "Tōkei-ji Temple's mossy stone steps and gate; tree leaves rustle gently in the breeze, dappled sunlight shifts softly across the stones; peaceful, contemplative motion.",
-      "hardsub": "normal"
+      "motion_prompt": "Tōkei-ji Temple's mossy stone steps and gate; tree leaves rustle gently in the breeze, dappled sunlight shifts softly across the stones; peaceful, contemplative motion."
     }
   },
   {
@@ -2851,8 +2716,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -2872,8 +2736,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": "Toyokuni Shrine at dusk; lantern light flickers faintly, tree branches sway gently, a quiet stillness pervades the empty shrine grounds.",
-      "hardsub": "normal"
+      "motion_prompt": "Toyokuni Shrine at dusk; lantern light flickers faintly, tree branches sway gently, a quiet stillness pervades the empty shrine grounds."
     }
   },
   {
@@ -2893,8 +2756,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -2914,8 +2776,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -2935,8 +2796,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -2956,8 +2816,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": "Kunōzan Tōshō-gū Shrine; sunlight filters through surrounding trees, leaves rustle faintly in the wind, the stone steps and vermillion architecture bathed in soft shifting light.",
-      "hardsub": "normal"
+      "motion_prompt": "Kunōzan Tōshō-gū Shrine; sunlight filters through surrounding trees, leaves rustle faintly in the wind, the stone steps and vermillion architecture bathed in soft shifting light."
     }
   },
   {
@@ -2977,8 +2836,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -2998,8 +2856,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -3019,8 +2876,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -3040,8 +2896,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -3061,8 +2916,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -3082,8 +2936,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "The real Hōkō-ji temple bell, its inscription visible; the camera drifts slowly across the bronze surface as soft ambient light shifts, framing the bell as the small spark behind a larger decision.",
-      "hardsub": "normal"
+      "motion_prompt": "The real Hōkō-ji temple bell, its inscription visible; the camera drifts slowly across the bronze surface as soft ambient light shifts, framing the bell as the small spark behind a larger decision."
     }
   },
   {
@@ -3103,8 +2956,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -3124,8 +2976,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Toyotomi Hideyori standing alone against a dark background as a solitary, imposing 'living symbol'; his robes faintly stir, dim light flickers across his form, emphasizing his quiet, dangerous presence.",
-      "hardsub": "normal"
+      "motion_prompt": "Toyotomi Hideyori standing alone against a dark background as a solitary, imposing 'living symbol'; his robes faintly stir, dim light flickers across his form, emphasizing his quiet, dangerous presence."
     }
   },
   {
@@ -3145,8 +2996,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -3166,8 +3016,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -3187,8 +3036,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -3208,8 +3056,7 @@
       "film_grain": "heavy",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -3229,8 +3076,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -3250,8 +3096,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": "1688年（元禄元年）",
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -3271,8 +3116,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -3292,8 +3136,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -3313,8 +3156,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "A quiet Buddhist temple courtyard at dusk; a solitary monk sweeps fallen leaves in slow, deliberate motion; leaves drift gently across the courtyard stones.",
-      "hardsub": "normal"
+      "motion_prompt": "A quiet Buddhist temple courtyard at dusk; a solitary monk sweeps fallen leaves in slow, deliberate motion; leaves drift gently across the courtyard stones."
     }
   },
   {
@@ -3334,8 +3176,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": "Toyokuni Shrine, quiet and empty at dusk; the fading light shifts slowly across the shrine grounds, leaves rustle faintly, symbolizing the closing of the Toyotomi legacy.",
-      "hardsub": "normal"
+      "motion_prompt": "Toyokuni Shrine, quiet and empty at dusk; the fading light shifts slowly across the shrine grounds, leaves rustle faintly, symbolizing the closing of the Toyotomi legacy."
     }
   },
   {
@@ -3355,8 +3196,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -3376,8 +3216,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -3397,8 +3236,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -3418,8 +3256,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -3439,8 +3276,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -3460,8 +3296,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -3481,8 +3316,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -3502,8 +3336,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -3523,8 +3356,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -3544,8 +3376,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -3565,8 +3396,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -3586,8 +3416,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -3607,8 +3436,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "A slow cross-dissolve from the young, gaunt 'Mikatagahara' grimacing portrait of Ieyasu into the formal, deified 'Tōshō Daigongen' portrait of him in old age; no camera movement, only a gentle multi-second dissolve symbolizing his lifelong journey.",
-      "hardsub": "normal"
+      "motion_prompt": "A slow cross-dissolve from the young, gaunt 'Mikatagahara' grimacing portrait of Ieyasu into the formal, deified 'Tōshō Daigongen' portrait of him in old age; no camera movement, only a gentle multi-second dissolve symbolizing his lifelong journey."
     }
   },
   {
@@ -3628,8 +3456,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -3649,8 +3476,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": "normal"
+      "motion_prompt": null
     }
   },
   {
@@ -3670,8 +3496,7 @@
       "film_grain": "medium",
       "vignette": true,
       "text_overlay_ja": null,
-      "motion_prompt": "Osaka Castle silhouetted against a setting sun; the camera slowly pulls back and wide, the sun's glow shifts gently across the horizon, closing and reflective in mood.",
-      "hardsub": "normal"
+      "motion_prompt": "Osaka Castle silhouetted against a setting sun; the camera slowly pulls back and wide, the sun's glow shifts gently across the horizon, closing and reflective in mood."
     }
   },
   {
@@ -3691,8 +3516,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   },
   {
@@ -3712,8 +3536,7 @@
       "film_grain": "light",
       "vignette": false,
       "text_overlay_ja": null,
-      "motion_prompt": null,
-      "hardsub": null
+      "motion_prompt": null
     }
   }
 ]
