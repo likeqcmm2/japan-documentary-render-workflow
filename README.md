@@ -26,6 +26,23 @@ The repo is intended for a future Codex session: clone it on a new Vast ComfyUI 
 RENDER_MODE=optimized RENDER_WORKERS=6 bash scripts/run_full_pipeline.sh shot.json voice.wav
 ```
 
+On a dual-GPU server, run one ComfyUI instance per GPU and split a single
+production's LTX shots across both instances:
+
+```bash
+LTX_WORKERS=2 \
+LTX_COMFY_URLS=http://127.0.0.1:18188,http://127.0.0.1:18189 \
+LTX_COMFY_DIRS=/workspace/ComfyUI-gpu0,/workspace/ComfyUI-gpu1 \
+RENDER_MODE=optimized RENDER_WORKERS=6 \
+bash scripts/run_full_pipeline.sh shot.json voice.wav
+```
+
+The workers preserve the original shot IDs and use a deterministic,
+duration-balanced partition. They write disjoint clip names into the same
+project cache; validation and final rendering start only after every worker
+finishes successfully. Models may be shared read-only between the two ComfyUI
+roots, but their input, output, temp, user data, and API ports must be separate.
+
 `RENDER_WORKERS=6` is the tested default for the 64-core/128-thread RTX 5090 setup. The optimized renderer
 caps the value at 6. This setting completed the 206-shot Edo render in 7m 54.6s with no FFmpeg errors,
 which was 44.66% faster than the same optimized render with 3 workers and 76.46% faster than the legacy

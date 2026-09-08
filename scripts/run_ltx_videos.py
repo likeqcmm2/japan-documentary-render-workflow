@@ -20,6 +20,8 @@ def parse_args():
     parser.add_argument("--aspect-ratio", default=ASPECT_RATIO)
     parser.add_argument("--multiple", type=int, default=MULTIPLE)
     parser.add_argument("--fps", type=int, default=FPS)
+    parser.add_argument("--shard-count", type=int, default=1, help="Number of parallel LTX workers.")
+    parser.add_argument("--shard-index", type=int, default=0, help="Zero-based worker index.")
     return parser.parse_args()
 
 args = parse_args()
@@ -29,7 +31,9 @@ INPUT_JSON = Path(args.input_json) if args.input_json else PROJECT / "inputs" / 
 IMAGES_DIR = Path(args.images_dir) if args.images_dir else PROJECT / "generated_images"
 OUT_DIR = Path(args.output_dir) if args.output_dir else PROJECT / "ltx_videos"
 PAYLOAD = Path(args.payload) if args.payload else PROJECT / "comfy_workflows" / "ltx-2.5-nvfp4-i2v.payload.json"
-LOG_PATH = OUT_DIR.with_name(OUT_DIR.name + "_log.jsonl")
+if args.shard_count < 1 or not 0 <= args.shard_index < args.shard_count:
+    raise SystemExit("shard-count must be >= 1 and shard-index must be in [0, shard-count)")
+LOG_PATH = OUT_DIR.with_name(OUT_DIR.name + (f"_worker_{args.shard_index}.jsonl" if args.shard_count > 1 else "_log.jsonl"))
 INPUT_SUBDIR = "japan_project_i2v"
 INPUT_DIR = COMFY / "input" / INPUT_SUBDIR
 FPS = args.fps
@@ -41,6 +45,26 @@ items = json.loads(INPUT_JSON.read_text())
 for runtime_id, item in enumerate(items, 1):
     item["_runtime_id"] = runtime_id
 video_items = [x for x in items if (x.get("media_type") or "").lower() == "video"]
+
+def shot_duration(item):
+    return max(1, int(math.ceil(float(item["end"]) - float(item["start"]))))
+
+def balanced_shards(items, count):
+    shards = [[] for _ in range(count)]
+    totals = [0 for _ in range(count)]
+    # Longest-processing-time partitioning keeps uneven clips balanced while
+    # runtime IDs remain stable for cache and final assembly.
+    ordered = sorted(items, key=lambda item: (-shot_duration(item), item["_runtime_id"]))
+    for item in ordered:
+        target = min(range(count), key=lambda index: (totals[index], index))
+        shards[target].append(item)
+        totals[target] += shot_duration(item)
+    for shard in shards:
+        shard.sort(key=lambda item: item["_runtime_id"])
+    return shards, totals
+
+all_shards, shard_totals = balanced_shards(video_items, args.shard_count)
+video_items = all_shards[args.shard_index]
 base_payload = json.loads(PAYLOAD.read_text())["input"]["workflow_json"]
 
 def log(entry):
@@ -117,8 +141,7 @@ def copy_comfy_output(filename, subfolder, shot_id):
 def make_prompt(item):
     w = json.loads(json.dumps(base_payload))
     shot_id = item["_runtime_id"]
-    duration = int(math.ceil(float(item["end"]) - float(item["start"])))
-    duration = max(1, duration)
+    duration = shot_duration(item)
     motion_prompt = (item.get("edit") or {}).get("motion_prompt") or item.get("shot") or "subtle documentary motion"
     image_name = prepare_image(shot_id)
 
@@ -143,7 +166,7 @@ def run_one(item):
     shot_id = item["_runtime_id"]
     source_id = item.get("id", shot_id)
     dst = expected_output(shot_id)
-    requested_duration = max(1, int(math.ceil(float(item["end"]) - float(item["start"]))))
+    requested_duration = shot_duration(item)
     cached_ok, cached_info = valid_video(dst, requested_duration)
     if cached_ok:
         print(f"[skip] shot_{shot_id:03d} source_id={source_id} valid={cached_info} {dst}", flush=True)
@@ -201,7 +224,7 @@ def run_one(item):
                 print(f"[wait] shot_{shot_id:03d} t={int(now-started)}s running={running} pending={pending}", flush=True)
         time.sleep(5)
 
-print(f"[config] engine=ltx-2.5-benny-nvfp4-conv-vae video_jobs={len(video_items)} megapixels={args.megapixels} aspect={args.aspect_ratio!r} multiple={args.multiple} fps={FPS} prompt_enhancer=false final_target=1920x1080", flush=True)
+print(f"[config] engine=ltx-2.5-benny-nvfp4-conv-vae worker={args.shard_index + 1}/{args.shard_count} video_jobs={len(video_items)} assigned_seconds={shard_totals[args.shard_index]} all_worker_seconds={shard_totals} comfy_url={args.comfy_url} comfy_root={COMFY} megapixels={args.megapixels} aspect={args.aspect_ratio!r} multiple={args.multiple} fps={FPS} prompt_enhancer=false final_target=1920x1080", flush=True)
 for item in video_items:
     shot_id = item["_runtime_id"]
     source_id = item.get("id", shot_id)

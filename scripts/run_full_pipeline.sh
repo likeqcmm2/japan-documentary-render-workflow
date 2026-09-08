@@ -27,18 +27,52 @@ PY
 )"
 RENDER_MODE="${RENDER_MODE:-optimized}"
 RENDER_WORKERS="${RENDER_WORKERS:-6}"
+LTX_WORKERS="${LTX_WORKERS:-1}"
+IFS=',' read -r -a LTX_COMFY_URL_LIST <<< "${LTX_COMFY_URLS:-http://127.0.0.1:18188}"
+IFS=',' read -r -a LTX_COMFY_DIR_LIST <<< "${LTX_COMFY_DIRS:-/workspace/ComfyUI}"
+
+if ! [[ "$LTX_WORKERS" =~ ^[1-9][0-9]*$ ]]; then
+  echo "[fatal] LTX_WORKERS must be a positive integer" >&2
+  exit 2
+fi
+if [ "${#LTX_COMFY_URL_LIST[@]}" -lt "$LTX_WORKERS" ] || [ "${#LTX_COMFY_DIR_LIST[@]}" -lt "$LTX_WORKERS" ]; then
+  echo "[fatal] LTX_COMFY_URLS and LTX_COMFY_DIRS need at least LTX_WORKERS comma-separated entries" >&2
+  exit 2
+fi
 
 (cd "$REPO_DIR" && node scripts/generate_images_from_shot_json.js --input "$PROJECT/inputs/shot_list.json" --output "$PROJECT/generated_images")
 
-python3 "$REPO_DIR/scripts/run_ltx_videos.py" \
-  --project "$PROJECT" \
-  --input-json "$PROJECT/inputs/shot_list.json" \
-  --images-dir "$PROJECT/generated_images" \
-  --output-dir "$PROJECT/ltx_videos" \
-  --payload "$PROJECT/comfy_workflows/ltx-2.5-nvfp4-i2v.payload.json" \
-  --megapixels "${LTX_MEGAPIXELS:-0.9}" \
-  --aspect-ratio "${LTX_ASPECT_RATIO:-16:9 (Widescreen)}" \
-  --multiple "${LTX_MULTIPLE:-32}"
+ltx_pids=()
+for ((worker=0; worker<LTX_WORKERS; worker++)); do
+  echo "[ltx] starting worker=$((worker + 1))/$LTX_WORKERS url=${LTX_COMFY_URL_LIST[$worker]}"
+  python3 "$REPO_DIR/scripts/run_ltx_videos.py" \
+    --project "$PROJECT" \
+    --comfy "${LTX_COMFY_DIR_LIST[$worker]}" \
+    --comfy-url "${LTX_COMFY_URL_LIST[$worker]}" \
+    --input-json "$PROJECT/inputs/shot_list.json" \
+    --images-dir "$PROJECT/generated_images" \
+    --output-dir "$PROJECT/ltx_videos" \
+    --payload "$PROJECT/comfy_workflows/ltx-2.5-nvfp4-i2v.payload.json" \
+    --megapixels "${LTX_MEGAPIXELS:-0.9}" \
+    --aspect-ratio "${LTX_ASPECT_RATIO:-16:9 (Widescreen)}" \
+    --multiple "${LTX_MULTIPLE:-32}" \
+    --shard-count "$LTX_WORKERS" \
+    --shard-index "$worker" \
+    > "$PROJECT/ltx_worker_${worker}.log" 2>&1 &
+  ltx_pids+=("$!")
+done
+
+ltx_failed=0
+for ((worker=0; worker<LTX_WORKERS; worker++)); do
+  if ! wait "${ltx_pids[$worker]}"; then
+    echo "[fatal] LTX worker $worker failed; see $PROJECT/ltx_worker_${worker}.log" >&2
+    ltx_failed=1
+  fi
+done
+if [ "$ltx_failed" -ne 0 ]; then
+  exit 1
+fi
+echo "[ltx] all $LTX_WORKERS workers completed"
 
 python3 "$REPO_DIR/scripts/validate_project.py" \
   --project "$PROJECT" \
