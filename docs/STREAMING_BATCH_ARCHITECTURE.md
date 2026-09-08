@@ -74,9 +74,9 @@ remain a recovery interface for any individual project directory.
 
 - Manifest order controls delivery priority.
 - All video source images are dispatched before static assets across the batch.
-- Each LTX wave uses online duration balancing while retaining ascending runtime
-  order inside each GPU queue. This avoids assigning all long clips to one GPU
-  without making a worker wait for a late source image.
+- Each LTX wave uses one shared FIFO task queue. Each GPU atomically takes the
+  next runtime ID when it becomes free, so a faster GPU never waits for a fixed
+  pre-assigned shard to finish.
 - A production enters finalization only after its images, static clips, and LTX
   clips are complete.
 - The next production may enter LTX while the previous production is rendering,

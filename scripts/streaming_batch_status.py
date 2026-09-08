@@ -34,6 +34,7 @@ def main():
         if not shot_json.is_absolute(): shot_json = manifest.parent / shot_json
         name = raw.get("name") or shot_json.stem.removesuffix("_final")
         project = Path(raw.get("project") or Path(args.project_root) / name)
+        if not project.is_absolute(): project = manifest.parent / project
         items = json.loads(shot_json.read_text())
         video_total = sum(1 for item in items if (item.get("media_type") or "").lower() == "video")
         final_dir = project / "final"

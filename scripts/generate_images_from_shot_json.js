@@ -157,6 +157,20 @@ function outputNameForRuntimeId(runtimeId) {
   return `${shotLabel(runtimeId)}.png`;
 }
 
+function isValidPng(filePath) {
+  try {
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile() || stat.size < 1000) return false;
+    const fd = fs.openSync(filePath, "r");
+    const header = Buffer.alloc(8);
+    fs.readSync(fd, header, 0, 8, 0);
+    fs.closeSync(fd);
+    return header.toString("hex") === "89504e470d0a1a0a";
+  } catch {
+    return false;
+  }
+}
+
 function buildJobs(inputPath, outputDir) {
   const data = JSON.parse(fs.readFileSync(inputPath, "utf8"));
   return normalizeItems(data).map((item, index) => {
@@ -347,7 +361,7 @@ async function main() {
   if (args.mediaType === "static") jobs = jobs.filter((job) => String(job.mediaType).toLowerCase() !== "video");
   if (Number.isInteger(args.startId)) jobs = jobs.filter((job) => job.runtimeId >= args.startId);
   if (Number.isInteger(args.endId)) jobs = jobs.filter((job) => job.runtimeId <= args.endId);
-  jobs = jobs.filter((job) => args.force || !fs.existsSync(path.join(args.output, job.outputName)));
+  jobs = jobs.filter((job) => args.force || !isValidPng(path.join(args.output, job.outputName)));
   if (args.videoFirst) {
     jobs.sort((a, b) => {
       const aVideo = String(a.mediaType).toLowerCase() === "video" ? 0 : 1;

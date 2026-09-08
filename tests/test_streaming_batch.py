@@ -1,8 +1,11 @@
 import importlib.util
 import json
 import tempfile
+import threading
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "run_streaming_batch.py"
@@ -12,13 +15,27 @@ SPEC.loader.exec_module(MODULE)
 
 
 class StreamingBatchTests(unittest.TestCase):
-    def test_balancing_preserves_upstream_order_per_worker(self):
-        assignments = MODULE.balanced_assignments([(1, 8), (2, 3), (3, 7), (4, 2), (5, 6)], 2)
-        self.assertEqual(sorted(sum(assignments, [])), [1, 2, 3, 4, 5])
-        for worker_ids in assignments:
-            self.assertEqual(worker_ids, sorted(worker_ids))
-        self.assertIn(1, assignments[0])
-        self.assertIn(2, assignments[1])
+    def test_dynamic_ltx_wave_dispatches_every_runtime_id_once(self):
+        calls = []
+        lock = threading.Lock()
+
+        def fake_run(command, **_kwargs):
+            runtime_id = int(command[command.index("--runtime-ids") + 1])
+            with lock:
+                calls.append(runtime_id)
+
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(MODULE, "run", side_effect=fake_run):
+            production = {
+                "project": Path(tmp),
+                "input_json": Path(tmp) / "shots.json",
+            }
+            args = SimpleNamespace(ltx_workers=2)
+            completed = MODULE.run_ltx_wave(
+                production, [(1, 9), (2, 3), (3, 8), (4, 2), (5, 7)], 1, args,
+                ["http://gpu0", "http://gpu1"], ["/comfy0", "/comfy1"],
+            )
+        self.assertEqual(completed, 5)
+        self.assertEqual(sorted(calls), [1, 2, 3, 4, 5])
 
     def test_state_upserts_phase_and_records_events(self):
         with tempfile.TemporaryDirectory() as tmp:

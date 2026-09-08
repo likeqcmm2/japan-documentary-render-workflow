@@ -6,6 +6,8 @@ import concurrent.futures
 import json
 import math
 import os
+import queue
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -92,7 +94,7 @@ def run(command, *, log=None, env=None):
 
 def api_ready(url):
     try:
-        with urllib.request.urlopen(f"{url}/object_info", timeout=5) as response:
+        with urllib.request.urlopen(f"{url}/system_stats", timeout=5) as response:
             return response.status == 200
     except Exception:
         return False
@@ -105,6 +107,19 @@ def registry_ready(url, required_models):
         return all(model in payload for model in required_models)
     except Exception:
         return False
+
+
+def comfy_version(url):
+    with urllib.request.urlopen(f"{url}/system_stats", timeout=10) as response:
+        payload = json.load(response)
+    return str((payload.get("system") or {}).get("comfyui_version") or "")
+
+
+def version_tuple(value):
+    try:
+        return tuple(int(part) for part in value.split(".")[:3])
+    except ValueError:
+        return ()
 
 
 def wait_apis(urls, timeout=240):
@@ -148,14 +163,20 @@ def normalize_productions(manifest, project_root):
         if not shot_json.is_absolute(): shot_json = base / shot_json
         if not voice.is_absolute(): voice = base / voice
         name = raw.get("name") or shot_json.stem.removesuffix("_final")
+        if not re.fullmatch(r"[A-Za-z0-9._-]+", name):
+            raise ValueError(f"unsafe production name: {name!r}")
         project = Path(raw.get("project") or Path(project_root) / name)
+        if not project.is_absolute(): project = base / project
+        drive_name = raw.get("drive_name") or f"{name}_final_video.mp4"
+        if Path(drive_name).name != drive_name or not drive_name.lower().endswith(".mp4"):
+            raise ValueError(f"unsafe drive_name: {drive_name!r}")
         result.append({
             "index": index,
             "name": name,
             "shot_json": shot_json.resolve(),
             "voice": voice.resolve(),
             "project": project,
-            "drive_name": raw.get("drive_name") or f"{name}_final_video.mp4",
+            "drive_name": drive_name,
         })
     names = [production["name"] for production in result]
     projects = [str(production["project"].resolve()) for production in result]
@@ -166,13 +187,21 @@ def normalize_productions(manifest, project_root):
     return result
 
 
-def preflight(productions, urls, no_upload=False):
+def preflight(productions, urls, no_upload=False, drive_remote="gdrive"):
     tools = ["node", "python3", "ffmpeg", "ffprobe"] + ([] if no_upload else ["rclone"])
     missing_tools = [name for name in tools if shutil.which(name) is None]
     if missing_tools:
         raise RuntimeError(f"missing required tools: {missing_tools}")
+    if not no_upload:
+        subprocess.run(
+            ["rclone", "lsd", f"{drive_remote}:", "--max-depth", "1"],
+            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, timeout=60,
+        )
     models = required_models()
     for url in urls:
+        version = comfy_version(url)
+        if version_tuple(version) < (0, 32, 0):
+            raise RuntimeError(f"ComfyUI >= 0.32.0 required at {url}; found {version or 'unknown'}")
         if not registry_ready(url, models):
             raise RuntimeError(f"ComfyUI registry is not ready with all required models: {url}")
     for production in productions:
@@ -183,7 +212,11 @@ def preflight(productions, urls, no_upload=False):
         if not isinstance(items, list) or not items:
             raise ValueError(f"{production['name']}: shot JSON must be a non-empty array")
         previous_end = None
+        source_ids = []
         for runtime_id, item in enumerate(items, 1):
+            source_ids.append(str(item.get("id", runtime_id)))
+            if not str(item.get("shot") or "").strip():
+                raise ValueError(f"{production['name']}: empty image prompt at runtime ID {runtime_id}")
             start = round(float(item["start"]) * 25)
             end = round(float(item["end"]) * 25)
             if (previous_end is None and start != 0) or (previous_end is not None and start != previous_end):
@@ -191,6 +224,8 @@ def preflight(productions, urls, no_upload=False):
             if end <= start:
                 raise ValueError(f"{production['name']}: empty frame interval at runtime ID {runtime_id}")
             previous_end = end
+        if len(source_ids) != len(set(source_ids)):
+            raise ValueError(f"{production['name']}: duplicate source IDs")
         voice_duration = float(subprocess.check_output([
             "ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(production["voice"])
         ], text=True).strip())
@@ -268,17 +303,38 @@ def static_renderer(production, state, image_ready):
     state.set(name, "static_clips", "complete")
 
 
-def balanced_assignments(items, workers):
-    buckets = [[] for _ in range(workers)]
-    totals = [0] * workers
-    # Keep each worker's queue aligned with upstream image order. Greedy
-    # duration balancing still happens online, without making a GPU wait for a
-    # late high-runtime-ID image while earlier images are already available.
-    for runtime_id, duration in items:
-        target = min(range(workers), key=lambda index: (totals[index], index))
-        buckets[target].append(runtime_id)
-        totals[target] += duration
-    return buckets
+def run_ltx_wave(production, wave, wave_index, args, urls, dirs):
+    tasks = queue.Queue()
+    for runtime_id, _duration in wave:
+        tasks.put(runtime_id)
+
+    def gpu_worker(worker):
+        completed = 0
+        log_path = production["project"] / "logs" / f"ltx_wave_{wave_index}_worker_{worker}.log"
+        while True:
+            try:
+                runtime_id = tasks.get_nowait()
+            except queue.Empty:
+                return completed
+            command = [
+                "python3", str(REPO / "scripts" / "run_ltx_videos.py"),
+                "--project", str(production["project"]), "--comfy", dirs[worker], "--comfy-url", urls[worker],
+                "--input-json", str(production["input_json"]), "--images-dir", str(production["project"] / "generated_images"),
+                "--output-dir", str(production["project"] / "ltx_videos"),
+                "--payload", str(production["project"] / "comfy_workflows" / "ltx-2.5-nvfp4-i2v.payload.json"),
+                "--runtime-ids", str(runtime_id), "--wait-for-images",
+                "--image-failure-file", str(production["project"] / "images.failed"),
+                "--worker-label", f"wave_{wave_index}_worker_{worker}",
+            ]
+            try:
+                run(command, log=log_path)
+                completed += 1
+            finally:
+                tasks.task_done()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=args.ltx_workers, thread_name_prefix=f"ltx-wave-{wave_index}") as pool:
+        futures = [pool.submit(gpu_worker, worker) for worker in range(args.ltx_workers)]
+        return sum(future.result() for future in futures)
 
 
 def run_ltx(production, args, urls, dirs, services, state):
@@ -292,30 +348,9 @@ def run_ltx(production, args, urls, dirs, services, state):
     state.set(name, "ltx", "running", {"jobs": len(video_jobs), "wave_size": wave_size})
     for wave_index, offset in enumerate(range(0, len(video_jobs), wave_size), 1):
         wave = video_jobs[offset:offset + wave_size]
-        assignments = balanced_assignments(wave, args.ltx_workers)
-        processes = []
-        for worker, runtime_ids in enumerate(assignments):
-            if not runtime_ids:
-                continue
-            command = [
-                "python3", str(REPO / "scripts" / "run_ltx_videos.py"),
-                "--project", str(production["project"]), "--comfy", dirs[worker], "--comfy-url", urls[worker],
-                "--input-json", str(production["input_json"]), "--images-dir", str(production["project"] / "generated_images"),
-                "--output-dir", str(production["project"] / "ltx_videos"),
-                "--payload", str(production["project"] / "comfy_workflows" / "ltx-2.5-nvfp4-i2v.payload.json"),
-                "--runtime-ids", ",".join(map(str, runtime_ids)), "--wait-for-images",
-                "--image-failure-file", str(production["project"] / "images.failed"),
-                "--worker-label", f"wave_{wave_index}_worker_{worker}",
-            ]
-            log = (production["project"] / "logs" / f"ltx_wave_{wave_index}_worker_{worker}.log").open("a", encoding="utf-8")
-            processes.append((subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, text=True), log))
-        failures = []
-        for process, log in processes:
-            code = process.wait()
-            log.close()
-            if code: failures.append(code)
-        if failures:
-            raise RuntimeError(f"LTX wave {wave_index} failed: {failures}")
+        completed = run_ltx_wave(production, wave, wave_index, args, urls, dirs)
+        if completed != len(wave):
+            raise RuntimeError(f"LTX wave {wave_index} count mismatch: expected={len(wave)} completed={completed}")
         state.set(name, "ltx", "running", {"completed": min(offset + len(wave), len(video_jobs)), "jobs": len(video_jobs)})
         if offset + len(wave) < len(video_jobs):
             restart_comfy(services, urls)
@@ -378,12 +413,20 @@ def main():
     services = [value.strip() for value in args.comfy_services.split(",") if value.strip()]
     if args.ltx_workers < 1 or len(urls) < args.ltx_workers or len(dirs) < args.ltx_workers:
         raise SystemExit("ltx-workers requires matching comfy URLs and directories")
+    if args.ltx_wave_per_worker < 1 or args.render_workers < 1:
+        raise SystemExit("ltx-wave-per-worker and render-workers must be positive")
+    if len(set(urls[:args.ltx_workers])) != args.ltx_workers or len(set(dirs[:args.ltx_workers])) != args.ltx_workers:
+        raise SystemExit("each LTX worker requires a unique ComfyUI URL and directory")
+    if not args.plan:
+        for comfy_dir in dirs[:args.ltx_workers]:
+            if not Path(comfy_dir).is_dir():
+                raise SystemExit(f"ComfyUI directory does not exist: {comfy_dir}")
     if services and len(services) < args.ltx_workers:
         raise SystemExit("comfy-services must be empty or provide one service per LTX worker")
     manifest = Path(args.manifest).resolve()
     productions = normalize_productions(manifest, args.project_root)
     if args.plan:
-        preflight(productions, [], True)
+        preflight(productions, [], True, args.drive_remote)
         plan = []
         for production in productions:
             items = json.loads(production["shot_json"].read_text())
@@ -402,7 +445,7 @@ def main():
     state = State(manifest.with_suffix(".state.sqlite3"))
     ready_events = {production["name"]: threading.Event() for production in productions}
     wait_apis(urls[:args.ltx_workers])
-    preflight(productions, urls[:args.ltx_workers], args.no_upload)
+    preflight(productions, urls[:args.ltx_workers], args.no_upload, args.drive_remote)
     for production in productions:
         production["render_workers"] = args.render_workers
         bootstrap(production)
