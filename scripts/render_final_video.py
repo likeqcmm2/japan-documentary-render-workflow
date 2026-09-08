@@ -23,6 +23,8 @@ def parse_args():
     parser.add_argument("--optimized", action="store_true", help="Use the static-hold fast path and bounded parallel rendering.")
     parser.add_argument("--workers", type=int, default=6, help="Concurrent optimized clip renders (default: 6).")
     parser.add_argument("--render-root", default=None, help="Optional directory for optimized render caches and intermediate files.")
+    parser.add_argument("--clips-only", action="store_true", help="Render eligible clips and stop before concat/final mux.")
+    parser.add_argument("--media-type", choices=("all", "static", "video"), default="all", help="Limit clip rendering to video or any non-video/static media type.")
     return parser.parse_args()
 
 args = parse_args()
@@ -533,16 +535,27 @@ def render_clip_optimized(item):
         raise RuntimeError(f"optimized ffmpeg failed for {clip_label(item)}")
 
 
+selected_items = [
+    item for item in ITEMS
+    if args.media_type == "all"
+    or (args.media_type == "video" and (item.get("media_type") or "").lower() == "video")
+    or (args.media_type == "static" and (item.get("media_type") or "").lower() != "video")
+]
+
 if args.optimized:
     workers = max(1, min(int(args.workers), 6))
     print(f"[optimized] workers={workers} render_root={RENDER_ROOT}", flush=True)
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = [executor.submit(render_clip, item) for item in ITEMS]
+        futures = [executor.submit(render_clip, item) for item in selected_items]
         for future in futures:
             future.result()
 else:
-    for item in ITEMS:
+    for item in selected_items:
         render_clip(item)
+
+if args.clips_only:
+    print(f"[clips-only] completed={len(selected_items)} media_type={args.media_type}", flush=True)
+    raise SystemExit(0)
 
 expected_total_frames = ITEMS[-1]["_end_frame"] - ITEMS[0]["_start_frame"]
 actual_clip_frames = 0

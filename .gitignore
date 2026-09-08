@@ -15,3 +15,5 @@ tmp_final_hardsub/
 final/
 *.log
 *_log.jsonl
+*.state.sqlite3
+*.delivery.json

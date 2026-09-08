@@ -45,6 +45,8 @@ function parseArgs(argv) {
     startId: null,
     endId: null,
     limit: null,
+    videoFirst: false,
+    mediaType: "all",
   };
 
   for (let i = 2; i < argv.length; i += 1) {
@@ -66,6 +68,14 @@ function parseArgs(argv) {
       i += 1;
     } else if (arg === "--limit" && next) {
       args.limit = Number.parseInt(next, 10);
+      i += 1;
+    } else if (arg === "--video-first") {
+      args.videoFirst = true;
+    } else if (arg === "--media-type" && next) {
+      if (!["all", "video", "static"].includes(next)) {
+        throw new Error("--media-type must be all, video, or static");
+      }
+      args.mediaType = next;
       i += 1;
     } else {
       throw new Error(`Unknown argument: ${arg}`);
@@ -188,7 +198,13 @@ async function generateOne({ client, job, outputPath }) {
       );
       const base64 = result?.data?.[0]?.b64_json;
       if (!base64) throw new Error("API response did not include data[0].b64_json.");
-      fs.writeFileSync(outputPath, Buffer.from(base64, "base64"));
+      const image = Buffer.from(base64, "base64");
+      if (image.length < 1000 || image.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a") {
+        throw new Error("API response did not contain a valid PNG payload.");
+      }
+      const temporaryPath = `${outputPath}.tmp-${process.pid}-${Date.now()}`;
+      fs.writeFileSync(temporaryPath, image);
+      fs.renameSync(temporaryPath, outputPath);
       console.log(`[done] ${outputPath}`);
       return { ok: true };
     } catch (error) {
@@ -327,9 +343,18 @@ async function main() {
 
   fs.mkdirSync(args.output, { recursive: true });
   let jobs = buildJobs(args.input, args.output);
+  if (args.mediaType === "video") jobs = jobs.filter((job) => String(job.mediaType).toLowerCase() === "video");
+  if (args.mediaType === "static") jobs = jobs.filter((job) => String(job.mediaType).toLowerCase() !== "video");
   if (Number.isInteger(args.startId)) jobs = jobs.filter((job) => job.runtimeId >= args.startId);
   if (Number.isInteger(args.endId)) jobs = jobs.filter((job) => job.runtimeId <= args.endId);
   jobs = jobs.filter((job) => args.force || !fs.existsSync(path.join(args.output, job.outputName)));
+  if (args.videoFirst) {
+    jobs.sort((a, b) => {
+      const aVideo = String(a.mediaType).toLowerCase() === "video" ? 0 : 1;
+      const bVideo = String(b.mediaType).toLowerCase() === "video" ? 0 : 1;
+      return aVideo - bVideo || a.runtimeId - b.runtimeId;
+    });
+  }
   if (Number.isInteger(args.limit)) jobs = jobs.slice(0, args.limit);
 
   console.log(`[input] ${args.input}`);
@@ -337,6 +362,8 @@ async function main() {
   console.log(`[config] model=${MODEL} size=${SIZE} quality=${QUALITY} format=${OUTPUT_FORMAT}`);
   console.log(`[rate] max_concurrent=${MAX_CONCURRENT_REQUESTS} start_interval=${REQUEST_START_INTERVAL_MS / 1000}s`);
   console.log(`[jobs] selected=${jobs.length}`);
+  console.log(`[order] video_first=${args.videoFirst}`);
+  console.log(`[filter] media_type=${args.mediaType}`);
 
   const client = new OpenAI({ apiKey });
   const logPath = path.join(args.output, "api-run-log.jsonl");

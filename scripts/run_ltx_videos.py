@@ -22,6 +22,11 @@ def parse_args():
     parser.add_argument("--fps", type=int, default=FPS)
     parser.add_argument("--shard-count", type=int, default=1, help="Number of parallel LTX workers.")
     parser.add_argument("--shard-index", type=int, default=0, help="Zero-based worker index.")
+    parser.add_argument("--runtime-ids", default=None, help="Comma-separated runtime IDs to process. Applied after stable IDs are assigned.")
+    parser.add_argument("--wait-for-images", action="store_true", help="Wait for upstream image generation instead of failing when an image is not ready.")
+    parser.add_argument("--image-wait-timeout", type=int, default=3600, help="Maximum seconds to wait for each upstream image.")
+    parser.add_argument("--image-failure-file", default=None, help="Abort image waiting if this upstream failure sentinel appears.")
+    parser.add_argument("--worker-label", default=None, help="Unique label for this worker's JSONL audit log.")
     return parser.parse_args()
 
 args = parse_args()
@@ -31,9 +36,11 @@ INPUT_JSON = Path(args.input_json) if args.input_json else PROJECT / "inputs" / 
 IMAGES_DIR = Path(args.images_dir) if args.images_dir else PROJECT / "generated_images"
 OUT_DIR = Path(args.output_dir) if args.output_dir else PROJECT / "ltx_videos"
 PAYLOAD = Path(args.payload) if args.payload else PROJECT / "comfy_workflows" / "ltx-2.5-nvfp4-i2v.payload.json"
+IMAGE_FAILURE_FILE = Path(args.image_failure_file) if args.image_failure_file else None
 if args.shard_count < 1 or not 0 <= args.shard_index < args.shard_count:
     raise SystemExit("shard-count must be >= 1 and shard-index must be in [0, shard-count)")
-LOG_PATH = OUT_DIR.with_name(OUT_DIR.name + (f"_worker_{args.shard_index}.jsonl" if args.shard_count > 1 else "_log.jsonl"))
+log_suffix = f"_{args.worker_label}" if args.worker_label else (f"_worker_{args.shard_index}" if args.shard_count > 1 else "_log")
+LOG_PATH = OUT_DIR.with_name(OUT_DIR.name + log_suffix + ".jsonl")
 INPUT_SUBDIR = "japan_project_i2v"
 INPUT_DIR = COMFY / "input" / INPUT_SUBDIR
 FPS = args.fps
@@ -45,6 +52,9 @@ items = json.loads(INPUT_JSON.read_text())
 for runtime_id, item in enumerate(items, 1):
     item["_runtime_id"] = runtime_id
 video_items = [x for x in items if (x.get("media_type") or "").lower() == "video"]
+if args.runtime_ids:
+    selected_runtime_ids = {int(value) for value in args.runtime_ids.split(",") if value.strip()}
+    video_items = [item for item in video_items if item["_runtime_id"] in selected_runtime_ids]
 
 def shot_duration(item):
     return max(1, int(math.ceil(float(item["end"]) - float(item["start"]))))
@@ -94,6 +104,19 @@ def prepare_image(shot_id):
     name = f"shot_{shot_id:03d}.png"
     src = IMAGES_DIR / name
     dst = INPUT_DIR / name
+    if not src.exists() and args.wait_for_images:
+        deadline = time.monotonic() + args.image_wait_timeout
+        last_notice = 0.0
+        while not src.exists():
+            if IMAGE_FAILURE_FILE and IMAGE_FAILURE_FILE.exists():
+                raise RuntimeError(f"upstream image generation failed: {IMAGE_FAILURE_FILE.read_text(errors='replace')[-2000:]}")
+            now = time.monotonic()
+            if now >= deadline:
+                raise TimeoutError(f"timed out waiting for upstream image: {src}")
+            if now - last_notice >= 30:
+                print(f"[image-wait] shot_{shot_id:03d} remaining={int(deadline - now)}s", flush=True)
+                last_notice = now
+            time.sleep(2)
     if not src.exists():
         raise FileNotFoundError(src)
     if not dst.exists() or dst.stat().st_size != src.stat().st_size:

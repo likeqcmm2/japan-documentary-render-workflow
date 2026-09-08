@@ -1,0 +1,14 @@
+{
+  "productions": [
+    {
+      "name": "k0_example",
+      "shot_json": "/workspace/inputs/k0_example/shot_list.json",
+      "voice": "/workspace/inputs/k0_example/voice.wav"
+    },
+    {
+      "name": "k1_example",
+      "shot_json": "/workspace/inputs/k1_example/shot_list.json",
+      "voice": "/workspace/inputs/k1_example/voice.wav"
+    }
+  ]
+}

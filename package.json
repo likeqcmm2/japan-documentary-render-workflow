@@ -6,7 +6,9 @@
   "type": "commonjs",
   "scripts": {
     "generate-images": "node scripts/generate_images_from_shot_json.js",
-    "check": "python3 scripts/validate_project.py"
+    "check": "python3 scripts/validate_project.py",
+    "streaming-batch": "python3 scripts/run_streaming_batch.py",
+    "streaming-status": "python3 scripts/streaming_batch_status.py"
   },
   "dependencies": {
     "openai": "^5.10.2"

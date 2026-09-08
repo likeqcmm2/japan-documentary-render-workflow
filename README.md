@@ -18,6 +18,67 @@ concurrently. The encoder settings remain `h264_nvenc`, `CQ 20`, `1920x1080`, an
 
 The repo is intended for a future Codex session: clone it on a new Vast ComfyUI server, provide the input JSON/audio and local secrets, then run the workflow to produce a Drive link.
 
+## Streaming Batch Mode
+
+Use streaming batch mode when several productions share an expensive GPU server.
+Unlike `run_full_pipeline.sh`, the batch orchestrator does not wait for one whole
+production to finish before feeding the GPUs again:
+
+- Image generation processes video shots first. LTX workers wait for and consume
+  each source image as soon as it appears.
+- One shared pair of GPU workers advances through productions in manifest order.
+  As soon as one production finishes LTX, the GPUs move to the next production
+  while CPU rendering, QC, and Drive upload continue for the previous one.
+- Static/photo clips are rendered on the CPU after that production's image pass,
+  concurrently with LTX generation.
+- LTX is split into bounded waves, 30 clips per GPU by default. ComfyUI is
+  restarted between waves to release accumulated host RAM before the cgroup OOM
+  killer interrupts active prompts.
+- A SQLite ledger beside the manifest records every material phase. Existing
+  validated image, LTX, and rendered-clip caches remain authoritative on resume.
+
+Create a manifest based on `examples/streaming_batch.example.json`, then run:
+
+```bash
+LTX_WORKERS=2 \
+LTX_COMFY_URLS=http://127.0.0.1:18188,http://127.0.0.1:18189 \
+LTX_COMFY_DIRS=/workspace/ComfyUI,/workspace/ComfyUI-gpu1 \
+LTX_COMFY_SERVICES=comfyui,comfyui-gpu1 \
+RENDER_WORKERS=6 \
+python3 scripts/run_streaming_batch.py /workspace/inputs/batch.json
+```
+
+Validate the complete plan without making API calls or rendering:
+
+```bash
+python3 scripts/run_streaming_batch.py /workspace/inputs/batch.json --plan
+```
+
+Run it under `nohup` for a rental server session, and inspect durable progress:
+
+```bash
+nohup python3 scripts/run_streaming_batch.py /workspace/inputs/batch.json \
+  > /workspace/streaming-batch.log 2>&1 &
+echo $! > /workspace/streaming-batch.pid
+
+python3 scripts/streaming_batch_status.py /workspace/inputs/batch.json
+```
+
+After every production is verified, `<manifest>.delivery.json` contains the final
+paths and Drive links for the whole batch.
+
+Important controls:
+
+- `--ltx-wave-per-worker 30`: controlled ComfyUI recycle interval.
+- `--no-upload`: render and QC locally without sending outputs to Drive.
+- `--project-root`: root for isolated per-production cache directories.
+- `--comfy-services ""`: disable automatic supervisor restarts when ComfyUI is
+  managed outside supervisor.
+
+The original `run_full_pipeline.sh` remains available for a single production
+and for emergency manual recovery. Both modes use the same artifact layout, so a
+streaming run can be resumed with the individual scripts.
+
 ## Render Speed And Fallback
 
 `scripts/run_full_pipeline.sh` uses optimized rendering by default:
@@ -572,7 +633,7 @@ Fix:
 The final production style includes:
 
 - GPT Image: `gpt-image-2`, `1536x864`, `quality=low`, `n=1`.
-- Request pacing: max `15` concurrent, new request every `4s`.
+- Request pacing: max `30` concurrent, new request every `2s`.
 - LTX 2.5 I2V production source: `0.9 MP`, 16:9, `25fps`, duration `ceil(end-start)`, prompt enhancer off.
 - FFmpeg fits the LTX source into the final `1920x1080` canvas without stretching, deliberately padding the small aspect-ratio difference with thin black bars above and below.
 - FFmpeg render output: `1920x1080`, `25fps`, `h264_nvenc`.
