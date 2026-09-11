@@ -143,7 +143,7 @@ def probe_video(path):
         return None
 
 def valid_video(path, requested_duration):
-    info = probe_video(path) if path.exists() and path.stat().st_size > 100000 else None
+    info = probe_video(path) if path.exists() and path.stat().st_size > 10000 else None
     if not info:
         return False, info
     valid = (

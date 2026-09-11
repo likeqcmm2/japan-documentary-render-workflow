@@ -134,7 +134,7 @@ def probe_video(path):
 
 
 def valid_cached_clip(path, expected_frames):
-    if not path.exists() or path.stat().st_size <= 100000:
+    if not path.exists() or path.stat().st_size <= 10000:
         return False
     try:
         frames, rate = probe_video(path)

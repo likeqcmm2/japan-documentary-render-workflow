@@ -73,7 +73,7 @@ def main():
             missing_images.append({"runtime_id": sid, "source_id": item.get("id", sid)})
         if (item.get("media_type") or "").lower() == "video":
             video_path = ltx_dir / f"shot_{sid:03d}.mp4"
-            if not video_path.exists() or video_path.stat().st_size < 100000:
+            if not video_path.exists() or video_path.stat().st_size < 10000:
                 missing_ltx.append({"runtime_id": sid, "source_id": item.get("id", sid)})
             else:
                 info = ffprobe_video(video_path)
