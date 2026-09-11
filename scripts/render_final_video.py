@@ -108,6 +108,8 @@ def run_ffmpeg(cmd, label):
         or "unsupported device" in result.stdout
         or "Unknown encoder 'h264_nvenc'" in result.stdout
         or "Unrecognized option 'cq'" in result.stdout
+        or "CreateInputBuffer failed: out of memory" in result.stdout
+        or "Cannot allocate memory" in result.stdout
     ):
         print(f"[fallback] {label}: h264_nvenc unavailable; retrying with libx264", flush=True)
         fallback = x264_fallback(cmd)
