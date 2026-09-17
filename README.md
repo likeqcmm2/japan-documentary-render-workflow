@@ -4,7 +4,7 @@ Production workflow to render a documentary-style YouTube video from a shot-list
 
 This repo packages the exact pipeline used for the production render:
 
-1. Generate one image per JSON shot with OpenAI `gpt-image-2`.
+1. Generate one image per JSON shot with OpenAI `gpt-image-2.5-flare`.
 2. For shots where `media_type` is `video`, run LTX 2.5 Image-to-Video using Benny NVFP4 and the Conv VAE in ComfyUI.
 3. Quantize the absolute JSON timeline once at 25 fps and render every shot to its assigned frame interval.
 4. Apply per-shot Ken Burns, grain, vignette, and typing overlays to video-only clips.
@@ -632,7 +632,7 @@ Fix:
 
 The final production style includes:
 
-- GPT Image: `gpt-image-2`, `1536x864`, `quality=low`, `n=1`.
+- GPT Image: `gpt-image-2.5-flare`, `1536x864`, `quality=low`, `n=1`.
 - Request pacing: max `30` concurrent, new request every `2s`.
 - LTX 2.5 I2V production source: `0.9 MP`, 16:9, `25fps`, duration `ceil(end-start)`, prompt enhancer off.
 - FFmpeg fits the LTX source into the final `1920x1080` canvas without stretching, deliberately padding the small aspect-ratio difference with thin black bars above and below.

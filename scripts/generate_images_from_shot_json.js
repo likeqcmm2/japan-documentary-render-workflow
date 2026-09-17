@@ -6,7 +6,7 @@ const process = require("process");
 
 const OpenAI = require("openai");
 
-const MODEL = "gpt-image-2";
+const MODEL = "gpt-image-2.5-flare";
 const SIZE = "1536x864";
 const QUALITY = "low";
 const OUTPUT_FORMAT = "png";
