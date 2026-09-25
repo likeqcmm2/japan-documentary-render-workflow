@@ -5,7 +5,7 @@ PROJECT="${PROJECT:-/workspace/japan_project}"
 COMFY="${COMFY:-/workspace/ComfyUI}"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-mkdir -p "$PROJECT"/{inputs,assets,comfy_workflows,generated_images,ltx_videos,final}
+mkdir -p "$PROJECT"/{inputs,assets,comfy_workflows,generated_images,fasth3_videos,final}
 
 echo "[setup] project=$PROJECT"
 echo "[setup] repo=$REPO_DIR"
@@ -13,7 +13,7 @@ echo "[setup] repo=$REPO_DIR"
 cp "$REPO_DIR"/assets/grain.mp4 "$PROJECT/assets/grain.mp4"
 cp "$REPO_DIR"/assets/keyboard-typing-sound-effect-335503.mp3 "$PROJECT/assets/keyboard-typing-sound-effect-335503.mp3"
 cp "$REPO_DIR"/assets/YujiBoku-Regular.ttf "$PROJECT/assets/YujiBoku-Regular.ttf"
-cp "$REPO_DIR"/comfy_workflows/ltx-2.5-nvfp4-i2v.payload.json "$PROJECT/comfy_workflows/ltx-2.5-nvfp4-i2v.payload.json"
+cp "$REPO_DIR"/comfy_workflows/fasth3-8step-i2v.payload.json "$PROJECT/comfy_workflows/fasth3-8step-i2v.payload.json"
 
 VENV="${VENV:-/venv/main}"
 "$VENV/bin/python" -m pip install --upgrade pillow huggingface_hub hf_xet safetensors >/dev/null
@@ -26,7 +26,7 @@ major, minor = torch.cuda.get_device_capability()
 name = torch.cuda.get_device_name()
 print(f"[setup] gpu={name} compute_capability={major}.{minor}")
 if major < 10:
-    raise SystemExit("[setup] Benny NVFP4 requires a Blackwell-class GPU (compute capability >= 10.0)")
+    raise SystemExit("[setup] FastH3 NVFP4 text encoder requires a Blackwell-class GPU (compute capability >= 10.0)")
 PY
 
 if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
@@ -50,27 +50,40 @@ else
   exit 1
 fi
 
-COMFY="$COMFY" "$VENV/bin/python" - <<'PY'
-import os, re
-from pathlib import Path
-version_file = Path(os.environ["COMFY"]) / "comfyui_version.py"
-text = version_file.read_text() if version_file.exists() else ""
-match = re.search(r'__version__\s*=\s*["\']([^"\']+)', text)
-if match:
-    version = tuple(int(x) for x in re.findall(r"\d+", match.group(1))[:3])
-    print(f"[setup] comfyui_version={match.group(1)}")
-    if version < (0, 32, 0):
-        raise SystemExit("[setup] ComfyUI >= 0.32.0 is required for Benny NVFP4")
-else:
-    print("[setup] warning: could not read ComfyUI version; API/model validation remains required")
-PY
+COMFY="$COMFY" VENV="$VENV" "$REPO_DIR/scripts/update_comfyui.sh"
 
 if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
-  COMFY="$COMFY" VENV="$VENV" "$REPO_DIR/scripts/download_ltx_models.sh"
+  COMFY="$COMFY" VENV="$VENV" "$REPO_DIR/scripts/download_fasth3_models.sh"
 else
   echo "[setup] SKIP_MODEL_DOWNLOAD=1; model download skipped"
 fi
 
+COMFY_SERVICE="${COMFY_SERVICE:-comfyui}"
+COMFY_URL="${COMFY_URL:-http://127.0.0.1:18188}"
+if [ -n "$COMFY_SERVICE" ]; then
+  supervisorctl restart "$COMFY_SERVICE"
+fi
+COMFY_URL="$COMFY_URL" MANIFEST="$REPO_DIR/model_manifest.json" "$VENV/bin/python" - <<'PYREADY'
+import json, os, time, urllib.request
+from pathlib import Path
+manifest = json.loads(Path(os.environ["MANIFEST"]).read_text())
+required = [m["filename"] for m in manifest["models_referenced_by_payload"]] + manifest["required_nodes"]
+url = os.environ["COMFY_URL"]
+for attempt in range(80):
+    try:
+        with urllib.request.urlopen(f"{url}/object_info", timeout=10) as response:
+            payload = response.read().decode()
+        missing = [name for name in required if name not in payload]
+        if not missing:
+            print("[setup] ComfyUI FastH3 nodes and models ready", flush=True)
+            break
+    except Exception:
+        pass
+    time.sleep(3)
+else:
+    raise SystemExit(f"[setup] ComfyUI did not report required FastH3 nodes and models at {url}; missing={missing if 'missing' in locals() else 'API unavailable'}")
+PYREADY
+
 echo "[setup] done"
-echo "[setup] LTX production source: 0.9 MP, 16:9, 25 fps; final renderer: 1920x1080"
+echo "[setup] FastH3 source: 1280x704, 24 fps; normalized clips: 25 fps; final renderer: 1920x1080"
 echo "[setup] Next: put shot_list.json and voice.wav into $PROJECT/inputs/"

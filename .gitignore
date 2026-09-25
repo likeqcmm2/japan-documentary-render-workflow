@@ -7,7 +7,7 @@ secrets/.env
 secrets/rclone.conf
 inputs/
 generated_images/
-ltx_videos/
+fasth3_videos/
 clips_final_hardsub/
 clips_final_base/
 typing_overlays_final_archival/

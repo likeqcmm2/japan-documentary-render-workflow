@@ -1,3 +1,4 @@
+import hashlib
 import json
 import argparse
 from concurrent.futures import ThreadPoolExecutor
@@ -10,11 +11,11 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Render final documentary video from shot JSON, generated images, LTX videos, and voice-over audio.")
+    parser = argparse.ArgumentParser(description="Render final documentary video from shot JSON, generated images, FastH3 videos, and voice-over audio.")
     parser.add_argument("--project", default="/workspace/japan_project")
     parser.add_argument("--input-json", default=None, help="Shot list JSON. Defaults to <project>/inputs/shot_list.json.")
     parser.add_argument("--images-dir", default=None, help="GPT Image output directory. Defaults to <project>/generated_images.")
-    parser.add_argument("--ltx-dir", default=None, help="LTX video directory. Defaults to <project>/ltx_videos.")
+    parser.add_argument("--fasth3-dir", default=None, help="FastH3 video directory. Defaults to <project>/fasth3_videos.")
     parser.add_argument("--voice", required=True, help="Voice-over WAV/MP3 path.")
     parser.add_argument("--output", default=None, help="Final MP4 path. Defaults to <project>/final/final_video.mp4.")
     parser.add_argument("--width", type=int, default=1920)
@@ -31,11 +32,11 @@ args = parse_args()
 PROJECT = Path(args.project)
 INPUT_JSON = Path(args.input_json) if args.input_json else PROJECT / "inputs" / "shot_list.json"
 IMAGES_DIR = Path(args.images_dir) if args.images_dir else PROJECT / "generated_images"
-LTX_DIR = Path(args.ltx_dir) if args.ltx_dir else PROJECT / "ltx_videos"
+FASTH3_DIR = Path(args.fasth3_dir) if args.fasth3_dir else PROJECT / "fasth3_videos"
 ITEMS = json.loads(INPUT_JSON.read_text())
 for runtime_id, item in enumerate(ITEMS, 1):
     item["_runtime_id"] = runtime_id
-RENDER_ROOT = Path(args.render_root) if args.render_root else PROJECT
+RENDER_ROOT = Path(args.render_root) if args.render_root else PROJECT / "render_fasth3"
 CLIP_DIR = RENDER_ROOT / "clips_final_frame_locked"
 BASE_CLIP_DIR = RENDER_ROOT / "clips_final_base"
 FINAL_DIR = PROJECT / "final"
@@ -133,10 +134,26 @@ def probe_video(path):
     return int(stream["nb_frames"]), stream["r_frame_rate"]
 
 
-def valid_cached_clip(path, expected_frames):
-    if not path.exists() or path.stat().st_size <= 10000:
+def clip_fingerprint(item):
+    src = source_path(item)
+    if not src.is_file():
+        raise FileNotFoundError(src)
+    digest = hashlib.sha256()
+    digest.update(src.read_bytes())
+    digest.update(json.dumps({
+        "edit": item.get("edit") or {}, "width": W, "height": H, "fps": FPS,
+        "optimized": args.optimized, "engine": "fasth3-8step-v2",
+    }, sort_keys=True, ensure_ascii=False).encode())
+    return digest.hexdigest()
+
+
+def valid_cached_clip(path, expected_frames, fingerprint):
+    metadata = path.with_suffix(".meta.json")
+    if not path.exists() or path.stat().st_size <= 10000 or not metadata.is_file():
         return False
     try:
+        if json.loads(metadata.read_text()).get("fingerprint") != fingerprint:
+            return False
         frames, rate = probe_video(path)
         audio = subprocess.run(
             ["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", str(path)],
@@ -145,6 +162,10 @@ def valid_cached_clip(path, expected_frames):
         return frames == expected_frames and rate == f"{FPS}/1" and not audio
     except (subprocess.SubprocessError, KeyError, ValueError, json.JSONDecodeError):
         return False
+
+
+def write_clip_metadata(path, fingerprint):
+    path.with_suffix(".meta.json").write_text(json.dumps({"fingerprint": fingerprint, "engine": "fasth3-8step-v2"}) + "\n")
 
 
 def duration(item):
@@ -174,7 +195,7 @@ def clip_path(item):
 def source_path(item):
     sid = runtime_id(item)
     if (item.get("media_type") or "").lower() == "video":
-        return LTX_DIR / f"shot_{sid:03d}.mp4"
+        return FASTH3_DIR / f"shot_{sid:03d}.mp4"
     return IMAGES_DIR / f"shot_{sid:03d}.png"
 
 
@@ -225,7 +246,7 @@ def photo_filter(item, frames):
 
 
 def video_filter():
-    # LTX 2.5 production sources are generated at 0.9 MP (typically 1280x704).
+    # FastH3 sources are normalized to 1280x704 at 25 fps before this stage.
     # Fit them inside the 1920x1080 canvas and deliberately retain thin black
     # letterbox bars when the source aspect ratio differs slightly.
     return (
@@ -357,7 +378,8 @@ def create_typing_overlay(item, clip_duration):
 def render_clip(item):
     output = clip_path(item)
     base_output = BASE_CLIP_DIR / f"{clip_label(item)}_base.mp4"
-    if valid_cached_clip(output, frame_count(item)):
+    fingerprint = clip_fingerprint(item)
+    if valid_cached_clip(output, frame_count(item), fingerprint):
         print(f"[skip] {output.name}", flush=True)
         return
 
@@ -378,7 +400,7 @@ def render_clip(item):
 
     cmd = ["ffmpeg", "-hide_banner", "-y"]
     if media == "video":
-        cmd += ["-stream_loop", "-1", "-i", str(src)]
+        cmd += ["-i", str(src)]
     else:
         cmd += ["-loop", "1", "-i", str(src)]
 
@@ -450,11 +472,13 @@ def render_clip(item):
         raise RuntimeError(f"ffmpeg failed for {clip_label(item)}")
 
     shutil.copy2(base_output, output)
+    write_clip_metadata(output, fingerprint)
 
 
 def render_clip_optimized(item):
     output = clip_path(item)
-    if valid_cached_clip(output, frame_count(item)):
+    fingerprint = clip_fingerprint(item)
+    if valid_cached_clip(output, frame_count(item), fingerprint):
         print(f"[skip] {output.name}", flush=True)
         return
 
@@ -472,7 +496,7 @@ def render_clip_optimized(item):
 
     cmd = ["ffmpeg", "-hide_banner", "-y"]
     if media == "video":
-        cmd += ["-stream_loop", "-1", "-i", str(src)]
+        cmd += ["-i", str(src)]
     elif (edit.get("kenburns_type") or "static_hold") in ("none", "static_hold"):
         # A single decoded frame is padded after scaling by tpad in the filter graph.
         cmd += ["-i", str(src)]
@@ -535,6 +559,7 @@ def render_clip_optimized(item):
     if result.returncode != 0:
         print(result.stdout[-4000:], flush=True)
         raise RuntimeError(f"optimized ffmpeg failed for {clip_label(item)}")
+    write_clip_metadata(output, fingerprint)
 
 
 selected_items = [

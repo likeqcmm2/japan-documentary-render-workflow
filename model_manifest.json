@@ -1,71 +1,55 @@
 {
-  "engine": "LTX 2.5 Benny NVFP4 + Conv VAE",
-  "comfyui_min_version": "0.32.0",
-  "gpu_requirement": "NVIDIA Blackwell (RTX 50-series) for native NVFP4 kernels",
-  "comfy_payload": "comfy_workflows/ltx-2.5-nvfp4-i2v.payload.json",
-  "proven_vast_payload_path": "/opt/comfyui-api-wrapper/payloads/video_ltx2_5_i2v_nvfp4_conv_vae.json",
+  "engine": "FastVideo FastH3 8-Step V2 image-to-video (video-only)",
+  "comfy_payload": "comfy_workflows/fasth3-8step-i2v.payload.json",
   "comfy_api_url": "http://127.0.0.1:18188",
+  "required_nodes": [
+    "MiniMaxH3ImageToVideo",
+    "MiniMaxH3SigmaShift",
+    "BlockSparseAttention",
+    "ModelAttentionBackend",
+    "CreateVideo",
+    "SaveVideo",
+    "ImageScale"
+  ],
   "models_referenced_by_payload": [
     {
-      "filename": "ltx-2.5-22b-distilled-transformer-nvfp4-comfy.safetensors",
-      "expected_bytes": 18721624688,
-      "hf_repo": "BennyDaBall/LTX-2.5-22b-distilled-nvfp4-comfy",
-      "hf_path": "ltx-2.5-22b-distilled-transformer-nvfp4-comfy.safetensors",
+      "filename": "fastvideo_fasth3_8step_v2_pruned_int8_convrot.safetensors",
+      "expected_bytes": 22128378696,
+      "hf_repo": "FastVideo/FastVideo-FastH3-Comfy",
+      "hf_path": "diffusion_models/fastvideo_fasth3_8step_v2_pruned_int8_convrot.safetensors",
       "target_dir_hint": "ComfyUI/models/diffusion_models",
-      "verification": "Must contain exactly 1176 .comfy_quant marker tensors",
-      "used_by_nodes": ["398:384 UNETLoader"]
+      "used_by_nodes": [
+        "105:6 UNETLoader"
+      ]
     },
     {
-      "filename": "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
-      "expected_bytes": 15372969374,
-      "hf_repo": "Lightricks/LTX-2.5",
-      "hf_path": "text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+      "filename": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "expected_bytes": 15687142551,
+      "hf_repo": "FastVideo/FastVideo-FastH3-Comfy",
+      "hf_path": "text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
       "target_dir_hint": "ComfyUI/models/text_encoders",
-      "used_by_nodes": ["398:387 CLIPLoader"]
+      "used_by_nodes": [
+        "105:13 CLIPLoader"
+      ]
     },
     {
-      "filename": "gemma4_e2b_it_bf16.safetensors",
-      "expected_bytes": 10278774160,
-      "hf_repo": "Comfy-Org/gemma-4",
-      "hf_path": "text_encoders/gemma4_e2b_it_bf16.safetensors",
-      "target_dir_hint": "ComfyUI/models/text_encoders",
-      "note": "Retained for the proven graph; production keeps prompt enhancer disabled.",
-      "used_by_nodes": ["398:393 CLIPLoader"]
-    },
-    {
-      "filename": "ltx-2.5-video-vae-conv-bf16.safetensors",
-      "expected_bytes": 1452269922,
-      "hf_repo": "Lightricks/LTX-2.5",
-      "hf_path": "vae/ltx-2.5-video-vae-conv-bf16.safetensors",
+      "filename": "minimax_h3_video_vae_int8_convrot.safetensors",
+      "expected_bytes": 2811065184,
+      "hf_repo": "FastVideo/FastVideo-FastH3-Comfy",
+      "hf_path": "vae/minimax_h3_video_vae_int8_convrot.safetensors",
       "target_dir_hint": "ComfyUI/models/vae",
-      "used_by_nodes": ["398:385 VAELoader"]
-    },
-    {
-      "filename": "ltx-2.5-audio-vae-bf16.safetensors",
-      "expected_bytes": 364866540,
-      "hf_repo": "Lightricks/LTX-2.5",
-      "hf_path": "vae/ltx-2.5-audio-vae-bf16.safetensors",
-      "target_dir_hint": "ComfyUI/models/vae",
-      "used_by_nodes": ["398:386 VAELoader"]
-    },
-    {
-      "filename": "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
-      "expected_bytes": 995778752,
-      "hf_repo": "Lightricks/LTX-2.5",
-      "hf_path": "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
-      "target_dir_hint": "ComfyUI/models/latent_upscale_models",
-      "used_by_nodes": ["398:371 LatentUpscaleModelLoader"]
+      "used_by_nodes": [
+        "105:11 VAELoader"
+      ]
     }
   ],
-  "ltx_runtime_settings": {
-    "aspect_ratio": "16:9 (Widescreen)",
-    "megapixels": 0.9,
-    "multiple": 32,
-    "observed_source_resolution": "1280x704",
-    "fps": 25,
-    "prompt_enhancer": false,
-    "audio_batch_size": 1,
-    "duration": "ceil(end - start) per video shot",
-    "final_output": "render_final_video.py fits every source into a 1920x1080 canvas at 25 fps and deliberately preserves thin black letterbox bars"
+  "fasth3_runtime_settings": {
+    "source_resolution": "1280x704",
+    "native_fps": 24,
+    "normalized_fps": 25,
+    "sampling_steps": 8,
+    "audio": false,
+    "duration": "exact absolute-frame shot interval after 25 fps normalization",
+    "final_output": "render_final_video.py fits the source in a 1920x1080 canvas with 12-pixel top and bottom bars"
   }
 }

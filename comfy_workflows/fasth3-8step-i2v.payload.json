@@ -1,0 +1,226 @@
+{
+  "input": {
+    "workflow_json": {
+      "136": {
+        "inputs": {
+          "image": "__INPUT_IMAGE__"
+        },
+        "class_type": "LoadImage"
+      },
+      "105:6": {
+        "inputs": {
+          "unet_name": "fastvideo_fasth3_8step_v2_pruned_int8_convrot.safetensors",
+          "weight_dtype": "default"
+        },
+        "class_type": "UNETLoader"
+      },
+      "105:13": {
+        "inputs": {
+          "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "type": "minimax",
+          "device": "default"
+        },
+        "class_type": "CLIPLoader"
+      },
+      "105:11": {
+        "inputs": {
+          "vae_name": "minimax_h3_video_vae_int8_convrot.safetensors"
+        },
+        "class_type": "VAELoader"
+      },
+      "105:143": {
+        "inputs": {
+          "model": [
+            "105:6",
+            0
+          ],
+          "shift_video": 10,
+          "shift_audio": 3
+        },
+        "class_type": "MiniMaxH3SigmaShift"
+      },
+      "105:128": {
+        "inputs": {
+          "model": [
+            "105:143",
+            0
+          ],
+          "attention": "comfy kitchen attention"
+        },
+        "class_type": "ModelAttentionBackend"
+      },
+      "105:127": {
+        "inputs": {
+          "model": [
+            "105:128",
+            0
+          ],
+          "selection": "vsa",
+          "selection.keep_percent": 10,
+          "start_percent": 0.2,
+          "end_percent": 1.0,
+          "dense_blocks": "",
+          "min_tokens": 12288,
+          "extra_tokens": 256,
+          "sink_conditioning": "exact_kv_and_rows",
+          "verbose": false
+        },
+        "class_type": "BlockSparseAttention"
+      },
+      "105:9": {
+        "inputs": {
+          "model": [
+            "105:127",
+            0
+          ],
+          "scheduler": "simple",
+          "steps": 8,
+          "denoise": 1.0
+        },
+        "class_type": "BasicScheduler"
+      },
+      "105:17": {
+        "inputs": {
+          "sampler_name": "res_multistep"
+        },
+        "class_type": "KSamplerSelect"
+      },
+      "105:15": {
+        "inputs": {
+          "noise_seed": 1
+        },
+        "class_type": "RandomNoise"
+      },
+      "105:111": {
+        "inputs": {
+          "value": 15.0
+        },
+        "class_type": "PrimitiveFloat"
+      },
+      "105:107": {
+        "inputs": {
+          "expression": "max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17",
+          "values.a": [
+            "105:111",
+            0
+          ]
+        },
+        "class_type": "ComfyMathExpression"
+      },
+      "105:104": {
+        "inputs": {
+          "clip": [
+            "105:13",
+            0
+          ],
+          "vae": [
+            "105:11",
+            0
+          ],
+          "first_frame": [
+            "137",
+            0
+          ],
+          "prompt": "__MOTION_PROMPT__",
+          "width": 1280,
+          "height": 704,
+          "length": [
+            "105:107",
+            1
+          ]
+        },
+        "class_type": "MiniMaxH3ImageToVideo"
+      },
+      "105:16": {
+        "inputs": {
+          "model": [
+            "105:127",
+            0
+          ],
+          "conditioning": [
+            "105:104",
+            0
+          ]
+        },
+        "class_type": "BasicGuider"
+      },
+      "105:14": {
+        "inputs": {
+          "noise": [
+            "105:15",
+            0
+          ],
+          "guider": [
+            "105:16",
+            0
+          ],
+          "sampler": [
+            "105:17",
+            0
+          ],
+          "sigmas": [
+            "105:9",
+            0
+          ],
+          "latent_image": [
+            "105:104",
+            1
+          ]
+        },
+        "class_type": "SamplerCustomAdvanced"
+      },
+      "105:10": {
+        "inputs": {
+          "samples": [
+            "105:14",
+            0
+          ],
+          "vae": [
+            "105:11",
+            0
+          ]
+        },
+        "class_type": "VAEDecode"
+      },
+      "105:91": {
+        "inputs": {
+          "images": [
+            "105:10",
+            0
+          ],
+          "fps": 24,
+          "bit_depth": "auto",
+          "color_space": "sRGB",
+          "codec": "none"
+        },
+        "class_type": "CreateVideo"
+      },
+      "92": {
+        "inputs": {
+          "video": [
+            "105:91",
+            0
+          ],
+          "filename_prefix": "japan_project_fasth3/shot",
+          "format": "auto",
+          "codec": "auto",
+          "format.codec": "auto"
+        },
+        "class_type": "SaveVideo"
+      },
+      "137": {
+        "inputs": {
+          "image": [
+            "136",
+            0
+          ],
+          "upscale_method": "lanczos",
+          "width": 1280,
+          "height": 704,
+          "crop": "center"
+        },
+        "class_type": "ImageScale"
+      }
+    }
+  }
+}

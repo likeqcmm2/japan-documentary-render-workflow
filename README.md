@@ -1,708 +1,140 @@
 # Japan Documentary Render Workflow
 
-Production workflow to render a documentary-style YouTube video from a shot-list JSON and voice-over audio.
+Produce a documentary-style YouTube video from a shot-list JSON and voice-over audio. For each `media_type: "video"` shot, this version animates its generated still with **FastVideo FastH3 8-Step V2** in ComfyUI. Static shots, timeline assembly, overlays, voice-over, QC, and Drive delivery retain the original pipeline.
 
-This repo packages the exact pipeline used for the production render:
+## Pipeline
 
-1. Generate one image per JSON shot with OpenAI `gpt-image-2.5-flare`.
-2. For shots where `media_type` is `video`, run LTX 2.5 Image-to-Video using Benny NVFP4 and the Conv VAE in ComfyUI.
-3. Quantize the absolute JSON timeline once at 25 fps and render every shot to its assigned frame interval.
-4. Apply per-shot Ken Burns, grain, vignette, and typing overlays to video-only clips.
-5. Concatenate the frame-locked clips, mix typing sounds globally with voice-over, verify zero frame drift, and upload with rclone.
+1. Generate a 1536×864 PNG for each shot with OpenAI `gpt-image-2.5-flare`. Successful images are cached; failed requests are retried for three rounds.
+2. Feed each video shot's PNG and `edit.motion_prompt` to the video-only FastH3 graph. Its three models are listed in `model_manifest.json`.
+3. Normalize each FastH3 source from native 24 fps to **1280×704, 25 fps, no audio**, with exactly `round(end * 25) - round(start * 25)` frames. The source PNG is center-cropped by a small amount before scaling, avoiding aspect distortion.
+4. Render static and video shots into the absolute 25 fps timeline. Retain Ken Burns, film grain, vignette, Japanese archival text plates, and typing effects.
+5. Concatenate the frame-locked clips, mix typing sounds with voice-over, verify zero frame drift, and upload the final 1920×1080 H.264/AAC video with rclone.
 
-The render stage defaults to the optimized renderer: static-hold photos use a direct
-centered crop, and six clips render
-concurrently. The encoder settings remain `h264_nvenc`, `CQ 20`, `1920x1080`, and
-`25 fps`. The optimized renderer keeps separate resumable caches under
-`<project>/render_optimized`.
+The 1280×704 FastH3 source is fitted without stretching into 1920×1080. This preserves the original roughly 12-pixel black bars above and below video shots. Photo handling is unchanged. Final intermediates contain no audio; ComfyUI does not use an audio branch or audio VAE.
 
-The repo is intended for a future Codex session: clone it on a new Vast ComfyUI server, provide the input JSON/audio and local secrets, then run the workflow to produce a Drive link.
+The previous LTX graph and models are no longer part of this workflow. Old `ltx_videos` caches remain untouched but are not accepted as FastH3 output. New source clips use `fasth3_videos`, and final clip caches use `render_fasth3_optimized` so stale LTX renders cannot be reused. Generated PNGs remain reusable.
 
-## Streaming Batch Mode
+## Input contract
 
-Use streaming batch mode when several productions share an expensive GPU server.
-Unlike `run_full_pipeline.sh`, the batch orchestrator does not wait for one whole
-production to finish before feeding the GPUs again:
-
-- Image generation processes video shots first. LTX workers wait for and consume
-  each source image as soon as it appears.
-- One shared pair of GPU workers advances through productions in manifest order.
-  As soon as one production finishes LTX, the GPUs move to the next production
-  while CPU rendering, QC, and Drive upload continue for the previous one.
-- Static/photo clips are rendered on the CPU after that production's image pass,
-  concurrently with LTX generation.
-- LTX is split into bounded waves, 30 clips per GPU by default. ComfyUI is
-  restarted between waves to release accumulated host RAM before the cgroup OOM
-  killer interrupts active prompts.
-- A SQLite ledger beside the manifest records every material phase. Existing
-  validated image, LTX, and rendered-clip caches remain authoritative on resume.
-
-Create a manifest based on `examples/streaming_batch.example.json`, then run:
-
-```bash
-LTX_WORKERS=2 \
-LTX_COMFY_URLS=http://127.0.0.1:18188,http://127.0.0.1:18189 \
-LTX_COMFY_DIRS=/workspace/ComfyUI,/workspace/ComfyUI-gpu1 \
-LTX_COMFY_SERVICES=comfyui,comfyui-gpu1 \
-RENDER_WORKERS=6 \
-python3 scripts/run_streaming_batch.py /workspace/inputs/batch.json
-```
-
-Validate the complete plan without making API calls or rendering:
-
-```bash
-python3 scripts/run_streaming_batch.py /workspace/inputs/batch.json --plan
-```
-
-Run it under `nohup` for a rental server session, and inspect durable progress:
-
-```bash
-nohup python3 scripts/run_streaming_batch.py /workspace/inputs/batch.json \
-  > /workspace/streaming-batch.log 2>&1 &
-echo $! > /workspace/streaming-batch.pid
-
-python3 scripts/streaming_batch_status.py /workspace/inputs/batch.json
-```
-
-After every production is verified, `<manifest>.delivery.json` contains the final
-paths and Drive links for the whole batch.
-
-Important controls:
-
-- `--ltx-wave-per-worker 30`: controlled ComfyUI recycle interval.
-- `--no-upload`: render and QC locally without sending outputs to Drive.
-- `--project-root`: root for isolated per-production cache directories.
-- `--comfy-services ""`: disable automatic supervisor restarts when ComfyUI is
-  managed outside supervisor.
-
-The original `run_full_pipeline.sh` remains available for a single production
-and for emergency manual recovery. Both modes use the same artifact layout, so a
-streaming run can be resumed with the individual scripts.
-
-## Render Speed And Fallback
-
-`scripts/run_full_pipeline.sh` uses optimized rendering by default:
-
-```bash
-RENDER_MODE=optimized RENDER_WORKERS=6 bash scripts/run_full_pipeline.sh shot.json voice.wav
-```
-
-On a dual-GPU server, run one ComfyUI instance per GPU and split a single
-production's LTX shots across both instances:
-
-```bash
-LTX_WORKERS=2 \
-LTX_COMFY_URLS=http://127.0.0.1:18188,http://127.0.0.1:18189 \
-LTX_COMFY_DIRS=/workspace/ComfyUI-gpu0,/workspace/ComfyUI-gpu1 \
-RENDER_MODE=optimized RENDER_WORKERS=6 \
-bash scripts/run_full_pipeline.sh shot.json voice.wav
-```
-
-The workers preserve the original shot IDs and use a deterministic,
-duration-balanced partition. They write disjoint clip names into the same
-project cache; validation and final rendering start only after every worker
-finishes successfully. Models may be shared read-only between the two ComfyUI
-roots, but their input, output, temp, user data, and API ports must be separate.
-
-`RENDER_WORKERS=6` is the tested default for the 64-core/128-thread RTX 5090 setup. The optimized renderer
-caps the value at 6. This setting completed the 206-shot Edo render in 7m 54.6s with no FFmpeg errors,
-which was 44.66% faster than the same optimized render with 3 workers and 76.46% faster than the legacy
-render. More workers are intentionally not enabled by default because NVENC sessions, CPU filters, and disk
-I/O can compete and reduce reliability.
-For a legacy comparison or emergency fallback, run:
-
-```bash
-RENDER_MODE=legacy bash scripts/run_full_pipeline.sh shot.json voice.wav
-```
-
-On the Edo benchmark with 206 shots, the legacy render took 33m 36.6s and the
-optimized render took 14m 17.6s: 57.47% less wall time (2.35x faster). Both outputs
-were 1920x1080, 25 fps, and 1519.041s long. Six sampled frame comparisons had SSIM
-between 0.9887 and 0.9974. Typing sounds are now placed on the absolute global
-timeline and mixed with voice-over only once; intermediate clips contain no AAC
-track, preventing encoder padding from accumulating across hundreds of shots.
-
-A 30-shot concurrency benchmark on the same instance took 98.977s with 2 workers
-and 77.044s with 3 workers, a 22.16% improvement, with no FFmpeg errors. The full
-6-worker production render was then validated separately before making 6 workers the
-default.
-
-## Important Security Rule
-
-Do **not** commit real API keys, Hugging Face tokens, rclone config, Google credentials, or Vast SSH credentials.
-
-Secrets live locally:
-
-- On Mac: `/Users/truongdonghai/Desktop/Japan_Documentary_Render_Secrets`.
-- On Vast: `/workspace/japan_project/secrets/.env` or shell environment variables.
-- rclone config is configured on the machine, not committed.
-
-See `secrets/README.md`.
-
-For this production setup, the Macbook-local secrets/config folder is:
-
-```text
-/Users/truongdonghai/Desktop/Japan_Documentary_Render_Secrets
-```
-
-Expected local files:
-
-```text
-/Users/truongdonghai/Desktop/Japan_Documentary_Render_Secrets/.env
-/Users/truongdonghai/Desktop/Japan_Documentary_Render_Secrets/rclone.conf
-```
-
-If `.env` does not exist yet, create it from:
-
-```text
-/Users/truongdonghai/Desktop/Japan_Documentary_Render_Secrets/.env.template
-```
-
-## Expected Input
-
-Each production run needs:
-
-- A shot-list JSON file. The filename can be anything.
-- A voice-over file, usually `.wav`.
-
-The scripts normalize these into:
-
-```text
-/workspace/japan_project/inputs/shot_list.json
-/workspace/japan_project/inputs/voice.wav
-```
-
-## JSON Contract
-
-Each shot should look like this shape:
+Each production needs a shot-list JSON file and voice-over audio (`.wav` or `.mp3`). JSON array order is the timeline; a one-based runtime ID determines reusable filenames even when a source `id` is a comma-separated group.
 
 ```json
 {
   "id": 1,
   "start": 0,
   "end": 6.529,
-  "text_ja": "...",
-  "media_type": "photo",
-  "shot": "Prompt for GPT Image.",
-  "on_screen_text_ja": "Text that should be included inside generated image prompt, or null.",
+  "media_type": "video",
+  "shot": "Image-generation prompt",
+  "on_screen_text_ja": null,
   "edit": {
-    "kenburns_type": "static_hold",
-    "kenburns_scale_range": "1.0 -> 1.08",
+    "motion_prompt": "Describe movement for FastH3",
     "film_grain": "light",
     "vignette": true,
-    "text_overlay_ja": "Text shown by renderer with typing effect, or null.",
-    "motion_prompt": "Prompt for LTX if media_type is video."
+    "text_overlay_ja": "Optional Japanese plate"
   }
 }
 ```
 
-`id` is source metadata and may be either a single number or a comma-separated
-group of original narration IDs:
+- `media_type: "photo"`: use the generated PNG in the existing static renderer.
+- `media_type: "video"`: animate the PNG with `edit.motion_prompt`. If it is absent, the script falls back to `shot`.
+- `on_screen_text_ja`: appended to the image prompt, not rendered as an FFmpeg overlay.
+- `edit.text_overlay_ja`: archival-paper plate and typing sound on the final timeline.
+- Legacy `edit.hardsub` is ignored; SRT burning is unsupported.
 
-```json
-{
-  "id": "101,102,103,104",
-  "start": 612.969,
-  "end": 627.184
-}
-```
+Absolute shot boundaries are rounded once to 25 fps. The final video's frame count is `round(last_shot.end * 25)`; per-shot rounding is never accumulated.
 
-The workflow assigns an internal `runtime_id` from the shot's one-based position
-in the JSON array. All reusable asset names use that runtime order:
+## New Vast server setup
 
-```text
-generated_images/shot_001.png
-ltx_videos/shot_001.mp4
-render_optimized/clips_final_frame_locked/clip_001.mp4
-```
-
-The original `id` is preserved in logs as `source_id`. Never derive asset names or
-render order from a comma-separated source ID. JSON array
-order is the production timeline.
-
-Field behavior:
-
-- `media_type: "photo"`: use generated image directly in FFmpeg.
-- `media_type: "video"`: first generate image, then run LTX I2V using `edit.motion_prompt`.
-- `shot`: base prompt for GPT Image.
-- `on_screen_text_ja`: appended to `shot` when generating the still image. It is **not** overlaid by FFmpeg.
-- `edit.text_overlay_ja`: rendered by FFmpeg/Pillow as a compact archival-paper plate in upper-left with Yuji Boku font and typing effect. The complete plate treatment (canvas, text, padding, border, and shadow) is scaled to 70% of the original production size; change `ARCHIVAL_OVERLAY_SCALE` in `scripts/render_final_video.py` only if a different global size is needed.
-- Legacy `edit.hardsub` values are ignored. The workflow does not accept an SRT or
-  burn subtitles into the video.
-- `edit.kenburns_type: "none"` or `"static_hold"`: no animated Ken Burns movement.
-- LTX production sources default to `0.9 MP`, 16:9 (observed as `1280x704`). The final renderer fits them into a `1920x1080` canvas while preserving aspect ratio and deliberately retains the resulting thin black bars above and below.
-
-## Packaged Reusable Assets
-
-Committed assets:
-
-- `assets/grain.mp4`
-- `assets/keyboard-typing-sound-effect-335503.mp3`
-- `assets/YujiBoku-Regular.ttf`
-- `comfy_workflows/ltx-2.5-nvfp4-i2v.payload.json`
-
-The Comfy payload is the proven production payload copied from:
-
-```text
-/opt/comfyui-api-wrapper/payloads/video_ltx2_5_i2v_nvfp4_conv_vae.json
-```
-
-## Model Requirements
-
-Read `model_manifest.json`.
-
-The proven LTX 2.5 payload references:
-
-- `BennyDaBall/LTX-2.5-22b-distilled-nvfp4-comfy` -> `models/diffusion_models/ltx-2.5-22b-distilled-transformer-nvfp4-comfy.safetensors`
-- `Lightricks/LTX-2.5` -> `models/text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors`
-- `Lightricks/LTX-2.5` -> `models/vae/ltx-2.5-video-vae-conv-bf16.safetensors`
-- `Lightricks/LTX-2.5` -> `models/vae/ltx-2.5-audio-vae-bf16.safetensors`
-- `Lightricks/LTX-2.5` -> `models/latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors`
-- `Comfy-Org/gemma-4` -> `models/text_encoders/gemma4_e2b_it_bf16.safetensors` (kept in the proven graph, while production disables prompt enhancement)
-
-This configuration requires ComfyUI `>= 0.32.0` and a Blackwell GPU such as RTX 5090 for the NVFP4 kernels. On a new server use:
-
-```bash
-scripts/download_ltx_models.sh
-```
-
-The helper uses `hf_xet` high-performance mode, verifies every exact byte size, and verifies that Benny's transformer contains exactly 1,176 `.comfy_quant` markers. `HF_TOKEN` is read from the environment or `secrets/.env`; never commit it.
-
-After downloading new models, restart ComfyUI so the model registry reloads:
-
-```bash
-pgrep -af "ComfyUI|main.py"
-supervisorctl restart comfyui
-sleep 5
-curl -fsS http://127.0.0.1:18188/system_stats >/dev/null && echo comfy_api_ready
-```
-
-On the tested Vast templates, killing the ComfyUI `main.py` process lets the supervisor restart it automatically.
-
-## New Vast Server Setup
-
-Assumption: the Vast server uses the same ComfyUI template as the production server:
-
-```text
-/workspace/ComfyUI
-ComfyUI API: http://127.0.0.1:18188
-Project dir: /workspace/japan_project
-```
-
-On the Vast server:
+Use a ComfyUI Vast image with an RTX 5090 or another Blackwell GPU with enough VRAM. The FastH3 model files total about **40 GB** on disk. The tested 1344×768 configuration used nearly the full 32 GB GPU memory; the production setting here is 1280×704 and must receive a one-shot smoke test on the new server.
 
 ```bash
 cd /workspace
-git clone <PRIVATE_REPO_URL> japan-documentary-render-workflow
+git clone https://github.com/likeqcmm2/japan-documentary-render-workflow.git
 cd japan-documentary-render-workflow
+# Copy secrets/.env from your Mac first; see below.
 scripts/setup_vast.sh
 ```
 
-`setup_vast.sh` installs required Python packages, Node/npm if the Vast template is missing them, and the repo's npm dependency for OpenAI image generation.
+`setup_vast.sh`:
 
-It also installs `fonts-noto-cjk` as a fallback for Japanese text overlays.
+- updates the ComfyUI Git checkout to the **latest `origin/master` commit** with a fast-forward merge, then installs its latest `requirements.txt` into `/venv/main`;
+- stops with a clear error if tracked ComfyUI files are locally modified or the checkout cannot fast-forward, instead of overwriting them;
+- installs Python, Node, npm, and Japanese-font dependencies as needed;
+- downloads only the three FastH3 model files from `FastVideo/FastVideo-FastH3-Comfy` using `hf_xet` high-performance mode and checks exact byte sizes;
+- restarts the configured ComfyUI supervisor service and waits for all required FastH3 nodes and models to appear in `/object_info`.
 
-Then create local secrets on Vast:
+Set `COMFY`, `VENV`, `COMFY_SERVICE`, and `COMFY_URL` if the ComfyUI installation differs from `/workspace/ComfyUI`, `/venv/main`, `comfyui`, and `http://127.0.0.1:18188`. For a second independent GPU/ComfyUI root, run setup again with those four variables pointing to that root and service. The two instances need separate API ports, input/output/user/temp folders; model files may be shared read-only.
 
-```bash
-cp .env.example secrets/.env
-nano secrets/.env
-```
+The Hugging Face token belongs in `secrets/.env` or the process environment. On the owner's Mac, the local secret files are under `/Users/truongdonghai/Desktop/Japan_Documentary_Render_Secrets`. Copy `.env` over SSH to the cloned repo's `secrets/.env` **before running setup** and set mode `600`. Never commit tokens, OpenAI keys, rclone config, or Vast credentials. Configure rclone separately when Drive upload is needed. `SKIP_MODEL_DOWNLOAD=1` is available only when all three exact models have already been installed.
 
-Minimum:
-
-```bash
-OPENAI_API_KEY=sk-proj-...
-HF_TOKEN=hf_...
-RCLONE_REMOTE=gdrive
-DRIVE_OUTPUT_DIR=Japan_Project_Render_Workflow/final
-```
-
-Configure rclone if it is not already configured:
-
-```bash
-rclone config
-rclone lsd gdrive:
-```
-
-If running from the owner's Macbook, prefer copying the existing local secrets/config to the Vast server:
-
-```bash
-ssh -p <PORT> root@<HOST> 'mkdir -p /workspace/japan-documentary-render-workflow/secrets /root/.config/rclone && chmod 700 /root/.config/rclone'
-scp -P <PORT> /Users/truongdonghai/Desktop/Japan_Documentary_Render_Secrets/.env root@<HOST>:/workspace/japan-documentary-render-workflow/secrets/.env
-scp -P <PORT> /Users/truongdonghai/Desktop/Japan_Documentary_Render_Secrets/rclone.conf root@<HOST>:/root/.config/rclone/rclone.conf
-ssh -p <PORT> root@<HOST> 'chmod 600 /workspace/japan-documentary-render-workflow/secrets/.env /root/.config/rclone/rclone.conf'
-```
-
-If `.env` is missing on the Macbook, ask the user to fill it before running paid API steps.
-
-Important: if you use `rsync --delete` to update the repo folder on Vast, it can remove `secrets/.env` because real secrets are not in git. Always copy `.env` again after syncing/cloning the repo:
-
-```bash
-scp -P <PORT> /Users/truongdonghai/Desktop/Japan_Documentary_Render_Secrets/.env root@<HOST>:/workspace/japan-documentary-render-workflow/secrets/.env
-ssh -p <PORT> root@<HOST> 'chmod 600 /workspace/japan-documentary-render-workflow/secrets/.env'
-```
-
-## Full Run
-
-Put input files anywhere on the Vast server, then run:
+## Single production
 
 ```bash
 PROJECT=/workspace/japan_project \
-scripts/run_full_pipeline.sh /path/to/shot_list.json /path/to/voice.wav
+  bash scripts/run_full_pipeline.sh /path/to/shot_list.json /path/to/voice.wav
 ```
 
-This does:
-
-1. Copies input files into `/workspace/japan_project/inputs/` and bootstraps the
-   packaged ComfyUI payload, grain, typing sound, and Yuji Boku font into the new
-   project directory. A fresh `PROJECT` path does not require manual asset copies.
-2. Runs OpenAI image generation:
-
-```bash
-node scripts/generate_images_from_shot_json.js \
-  --input /workspace/japan_project/inputs/shot_list.json \
-  --output /workspace/japan_project/generated_images
-```
-
-Image generation is deliberately fault-tolerant:
-
-- The first pass launches every selected image job. A failed prompt is written to `generated_images/api-run-log.jsonl`, and the batch continues instead of stopping at the first error.
-- Each request still has its normal transient-error retries. After the first pass, only the failed images are retried in **3 complete retry rounds**. Images that succeed are removed from the retry list.
-- If any image is still failing after all 3 rounds, the command exits non-zero and writes `generated_images/failed-images.json`. The full pipeline stops before LTX, validation, rendering, or upload so the prompts can be inspected safely.
-- Fix the prompt or API issue and rerun the same command. Existing successful `shot_###.png` files are skipped, so only missing images are attempted again.
-
-3. Runs LTX for `media_type: video` only:
-
-```bash
-python3 scripts/run_ltx_videos.py \
-  --project /workspace/japan_project \
-  --input-json /workspace/japan_project/inputs/shot_list.json \
-  --images-dir /workspace/japan_project/generated_images \
-  --output-dir /workspace/japan_project/ltx_videos
-```
-
-4. Validates generated assets and audio duration:
-
-```bash
-python3 scripts/validate_project.py \
-  --project /workspace/japan_project \
-  --input-json /workspace/japan_project/inputs/shot_list.json \
-  --voice /workspace/japan_project/inputs/voice.wav
-```
-
-5. Renders final:
-
-```bash
-python3 scripts/render_final_video.py \
-  --project /workspace/japan_project \
-  --input-json /workspace/japan_project/inputs/shot_list.json \
-  --images-dir /workspace/japan_project/generated_images \
-  --ltx-dir /workspace/japan_project/ltx_videos \
-  --voice /workspace/japan_project/inputs/voice.wav \
-  --output /workspace/japan_project/final/final_video.mp4
-```
-
-6. Uploads to Drive manually:
+This generates images, runs FastH3 only for video shots, validates source assets, renders all clips, combines audio, and writes `/workspace/japan_project/final/final_video.mp4`. It does **not** upload automatically; upload manually with:
 
 ```bash
 scripts/upload_drive.sh /workspace/japan_project/final/final_video.mp4
 ```
 
-## Smoke Test on a New Vast Server
-
-Before running full production on a new server, test a tiny subset first. This avoids spending hours before discovering setup issues.
-
-Create a 4-shot subset locally or on Vast:
+Two independent ComfyUI instances can split video shots:
 
 ```bash
-python3 - <<'PY'
-import json
-from pathlib import Path
-items = json.loads(Path("/workspace/japan_project/inputs/shot_list.json").read_text())
-Path("/workspace/japan_project/inputs/smoke_first4.json").write_text(
-    json.dumps(items[:4], ensure_ascii=False, indent=2),
-    encoding="utf-8",
-)
-PY
+FASTH3_WORKERS=2 \
+FASTH3_COMFY_URLS=http://127.0.0.1:18188,http://127.0.0.1:18189 \
+FASTH3_COMFY_DIRS=/workspace/ComfyUI,/workspace/ComfyUI-gpu1 \
+RENDER_WORKERS=6 \
+  bash scripts/run_full_pipeline.sh /path/to/shot_list.json /path/to/voice.wav
 ```
 
-Generate only those images:
+Workers keep stable runtime IDs and write disjoint clip names. `RENDER_MODE=legacy` remains available. The optimized renderer uses up to six concurrent clip jobs and the existing NVENC settings (`h264_nvenc`, CQ 20), with a `libx264` fallback when NVENC is unavailable.
+
+## Streaming batch
+
+Create a manifest like `examples/streaming_batch.example.json`, then inspect the plan:
 
 ```bash
-node scripts/generate_images_from_shot_json.js \
-  --input /workspace/japan_project/inputs/smoke_first4.json \
-  --output /workspace/japan_project/generated_images_smoke
+python3 scripts/run_streaming_batch.py /workspace/inputs/batch.json --plan
 ```
 
-Render only the first video shot through LTX:
+Run the batch:
 
 ```bash
-python3 - <<'PY'
-import json
-from pathlib import Path
-items = json.loads(Path("/workspace/japan_project/inputs/smoke_first4.json").read_text())
-video = [x for x in items if (x.get("media_type") or "").lower() == "video"][:1]
-Path("/workspace/japan_project/inputs/smoke_ltx_one.json").write_text(
-    json.dumps(video, ensure_ascii=False, indent=2),
-    encoding="utf-8",
-)
-PY
+FASTH3_WORKERS=2 \
+FASTH3_COMFY_URLS=http://127.0.0.1:18188,http://127.0.0.1:18189 \
+FASTH3_COMFY_DIRS=/workspace/ComfyUI,/workspace/ComfyUI-gpu1 \
+FASTH3_COMFY_SERVICES=comfyui,comfyui-gpu1 \
+RENDER_WORKERS=6 \
+  python3 scripts/run_streaming_batch.py /workspace/inputs/batch.json
+```
 
-python3 scripts/run_ltx_videos.py \
+For a rented server, use `nohup` and inspect durable status with `python3 scripts/streaming_batch_status.py /workspace/inputs/batch.json`. Use `--no-upload` to render and QC locally without Drive. The SQLite ledger beside the manifest records phases; validated PNGs, FastH3 clips, and final clips are reused on resume.
+
+The batch keeps four resource lanes: image generation, one FastH3 worker per GPU, static CPU clip rendering, and serialized final rendering/QC/upload. Each GPU takes the next available shot from a shared queue. ComfyUI is recycled between bounded waves and productions; `FASTH3_WAVE_PER_WORKER` (default 30) can be lowered after observing host RAM usage. See `docs/STREAMING_BATCH_ARCHITECTURE.md`.
+
+## Smoke test before a full production
+
+On a new Vast server, generate or reuse the PNG for one video shot and run:
+
+```bash
+python3 scripts/run_fasth3_videos.py \
   --project /workspace/japan_project \
-  --input-json /workspace/japan_project/inputs/smoke_ltx_one.json \
-  --images-dir /workspace/japan_project/generated_images_smoke \
-  --output-dir /workspace/japan_project/ltx_videos_smoke \
-  --payload /workspace/japan_project/comfy_workflows/ltx-2.5-nvfp4-i2v.payload.json \
-  --megapixels 0.9
+  --input-json /workspace/japan_project/inputs/shot_list.json \
+  --images-dir /workspace/japan_project/generated_images \
+  --runtime-ids 1
 ```
 
-Render the short smoke video:
+Replace `1` with a runtime ID whose `media_type` is `video`. The output must be **1280×704, 25 fps, no audio**, with the exact number of timeline frames. Then run `scripts/validate_project.py` when all required images and clips are available, and render a short production subset to verify 1920×1080 video, voice-over, and zero frame drift. The earlier FastH3 tests were successful at 1344×768; 1280×704 needs this confirmation on the new server. The example shot list includes video shots up to 19 seconds, beyond the roughly 15-second trained range noted by the ComfyUI node; smoke-test a longest shot before starting a large batch.
 
-```bash
-python3 scripts/render_final_video.py \
-  --project /workspace/japan_project \
-  --input-json /workspace/japan_project/inputs/smoke_first4.json \
-  --images-dir /workspace/japan_project/generated_images_smoke \
-  --ltx-dir /workspace/japan_project/ltx_videos_smoke \
-  --voice /workspace/japan_project/inputs/voice.wav \
-  --output /workspace/japan_project/final/smoke_first4.mp4
-```
+## Resume and QC
 
-Upload smoke output to verify rclone:
+- Image generation skips existing valid PNGs and retries failed jobs in three rounds. A persistent failure writes `generated_images/failed-images.json` and stops the production before rendering.
+- FastH3 caches include a fingerprint of the input PNG, prompt, payload, duration, and seed. Only a matching 1280×704, 25 fps, silent clip with the exact frame count is reused. Rendered clips also track their source and edit settings, so changed FastH3 output cannot reuse an older final clip.
+- The final renderer validates each frame-locked clip, concatenation, and final file. The batch additionally checks H.264 1920×1080 at 25 fps, AAC stereo 48 kHz, video samples, full audio decode, and Drive byte size/link when uploading.
+- `scripts/run_fasth3_videos.py` retries transient ComfyUI API failures and can be rerun after a service restart. Successful clips are skipped.
+- Secrets remain outside Git. See `secrets/README.md` and `.env.example`.
 
-```bash
-scripts/upload_drive.sh /workspace/japan_project/final/smoke_first4.mp4 Japan_Project_Render_Workflow/smoke_tests
-```
-
-## Timing Expectations
-
-Do not terminate a long run just because it appears slow.
-
-Observed production timings:
-
-- GPT Image generation: many requests run concurrently; usually minutes for ~177 shots.
-- LTX 2.5 I2V: production defaults to 0.9 MP for throughput. A tested 15-second shot took roughly 42-48 seconds on RTX 5090 after model load; a large project can still take hours.
-- FFmpeg render: faster than LTX, but still can take several minutes for ~177 clips.
-- Upload: depends on file size; the production file was ~1.1GB.
-
-Codex should keep polling and reporting progress. Do not kill the process unless there is a real error.
-
-## Resume Behavior
-
-The scripts are intentionally resumable:
-
-- Image generation skips existing `generated_images/shot_###.png` unless `--force` is passed. `###` is the one-based runtime position in JSON, not the source `id`.
-- Image generation records failures, completes the first pass, retries only failed images for 3 rounds, and pauses the workflow with `failed-images.json` if any remain unsuccessful.
-- LTX skips existing `ltx_videos/shot_###.mp4`.
-- Final render skips an existing `clips_final_frame_locked/clip_###.mp4`
-  only after ffprobe confirms the expected frame count, 25 fps, and no audio stream.
-
-If ComfyUI resets or a network connection drops, restart the same command. Already completed files should be skipped.
-
-## Known Production Issue and Fix
-
-During production, ComfyUI reset the local HTTP connection while polling `shot_113`:
-
-```text
-Connection reset by peer
-```
-
-This was not a prompt/model error. The script now retries Comfy API calls. If the command exits anyway, rerun it; completed video shots are skipped.
-
-## New Vast Troubleshooting Notes
-
-These issues were found and fixed while smoke-testing a brand-new Vast server on July 31, 2026.
-
-### `setup_vast.sh` fails on pip
-
-Symptom:
-
-```text
-ERROR: Cannot uninstall pip 24.0, RECORD file not found. The package was installed by debian.
-```
-
-Fix:
-
-`setup_vast.sh` no longer upgrades Debian's system pip directly. It retries package installation with `--break-system-packages`.
-
-### `node: command not found`
-
-Symptom:
-
-```text
-bash: node: command not found
-```
-
-Fix:
-
-`setup_vast.sh` now installs `nodejs npm` with apt if the Vast template is missing Node. OpenAI image generation requires Node.
-
-### Japanese text overlays render as square boxes
-
-Symptom:
-
-```text
-□□□□□□
-```
-
-Cause: the new Vast template does not have `fonts-noto-cjk`, so Japanese overlay text may fall back to a font without Japanese glyphs.
-
-Fix:
-
-Run `scripts/setup_vast.sh` again. It now installs `fonts-noto-cjk` and refreshes fontconfig. Verify:
-
-```bash
-fc-match "Noto Sans CJK JP"
-```
-
-Expected:
-
-```text
-NotoSansCJK-Regular.ttc: "Noto Sans CJK JP" "Regular"
-```
-
-Manual fallback if the setup script cannot install apt packages:
-
-```bash
-apt-get update
-apt-get install -y fonts-noto-cjk fontconfig
-fc-cache -f
-fc-match "Noto Sans CJK JP"
-```
-
-Official font source if manual download is needed instead of apt:
-[Google Noto CJK on GitHub](https://github.com/notofonts/noto-cjk).
-
-### GPT Image says `Missing OPENAI_API_KEY`
-
-Most likely cause: `secrets/.env` was not copied to Vast, or it was removed by repo sync.
-
-Fix:
-
-```bash
-scp -P <PORT> /Users/truongdonghai/Desktop/Japan_Documentary_Render_Secrets/.env root@<HOST>:/workspace/japan-documentary-render-workflow/secrets/.env
-ssh -p <PORT> root@<HOST> 'chmod 600 /workspace/japan-documentary-render-workflow/secrets/.env'
-```
-
-Then rerun image generation.
-
-### `hf download` downloads zero files
-
-Cause: wrong Hugging Face repo/path. The LTX files are spread across multiple repos, not a single `Lightricks/LTX-Video` repo.
-
-Fix:
-
-Use the current `scripts/download_ltx_models.sh`, which downloads and verifies these exact files:
-
-```text
-BennyDaBall/LTX-2.5-22b-distilled-nvfp4-comfy/ltx-2.5-22b-distilled-transformer-nvfp4-comfy.safetensors
-Lightricks/LTX-2.5/text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors
-Lightricks/LTX-2.5/vae/ltx-2.5-video-vae-conv-bf16.safetensors
-Lightricks/LTX-2.5/vae/ltx-2.5-audio-vae-bf16.safetensors
-Lightricks/LTX-2.5/latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors
-Comfy-Org/gemma-4/text_encoders/gemma4_e2b_it_bf16.safetensors
-```
-
-If ComfyUI raises `mat1 and mat2 shapes cannot be multiplied`, verify that the Benny file was used and the download script reports exactly 1,176 `.comfy_quant` markers.
-
-### LTX models downloaded but Comfy still cannot find them
-
-Cause: ComfyUI was already running before the models were downloaded.
-
-Fix:
-
-Restart ComfyUI and then test `curl http://127.0.0.1:18188/system_stats`.
-
-### FFmpeg/NVENC fails on RTX 5090 template
-
-Symptom:
-
-```text
-OpenEncodeSessionEx failed: unsupported device
-No capable devices found
-```
-
-Fix:
-
-`render_final_video.py` automatically retries failed `h264_nvenc` commands with `libx264`. The output should still be correct, just slower to encode.
-
-## Quality Notes
-
-The final production style includes:
-
-- GPT Image: `gpt-image-2.5-flare`, `1536x864`, `quality=low`, `n=1`.
-- Request pacing: max `30` concurrent, new request every `2s`.
-- LTX 2.5 I2V production source: `0.9 MP`, 16:9, `25fps`, duration `ceil(end-start)`, prompt enhancer off.
-- FFmpeg fits the LTX source into the final `1920x1080` canvas without stretching, deliberately padding the small aspect-ratio difference with thin black bars above and below.
-- FFmpeg render output: `1920x1080`, `25fps`, `h264_nvenc`.
-- Shot timing uses absolute frame boundaries: `round(start * 25)` to
-  `round(end * 25)`. Never round each shot duration independently.
-- Intermediate clips are video-only. Typing SFX is delayed to the shot's absolute
-  start frame and mixed globally with voice-over during the final mux.
-- Global typing SFX mixing uses `amix normalize=0`, followed by a peak limiter.
-  This preserves the original voice-over level instead of dividing it by the
-  number of delayed typing tracks; the limiter only protects moments where voice
-  and typing transients overlap.
-- If a new Vast template reports `h264_nvenc` / `OpenEncodeSessionEx failed` / `unsupported device`, `render_final_video.py` automatically retries that FFmpeg command with `libx264`.
-- Photo Ken Burns uses high-resolution intermediate scaling (`scale=8000`) before `zoompan` to avoid jerky motion.
-- Real grain asset from `assets/grain.mp4`, not synthetic FFmpeg noise.
-- `text_overlay_ja`: upper-left archival-paper plate at 70% scale, Yuji Boku font, typing animation, and typing sound trimmed to the typing duration.
-- SRT input and subtitle burning are intentionally unsupported. Legacy `edit.hardsub` fields are ignored.
-
-## Final QA Checklist
-
-After render:
-
-```bash
-ffprobe -v error -show_entries format=duration,size -of default=nw=1:nk=1 /workspace/japan_project/final/final_video.mp4
-```
-
-The renderer performs mandatory frame QC before producing the final file:
-
-```text
-clip frames = end_frame - start_frame
-sum of clip frames = round(last JSON end * 25)
-concat frames = sum of clip frames
-final frames = concat frames
-```
-
-Any mismatch stops the workflow. At 25 fps, final duration may differ from the
-millisecond JSON endpoint by at most half a frame (`0.020s`); this quantization is
-bounded globally and cannot accumulate from shot to shot.
-
-Extract QC frames:
-
-```bash
-mkdir -p /workspace/japan_project/final/qc_frames
-ffmpeg -y -ss 3 -i /workspace/japan_project/final/final_video.mp4 -frames:v 1 /workspace/japan_project/final/qc_frames/frame_003s.jpg
-ffmpeg -y -ss 8 -i /workspace/japan_project/final/final_video.mp4 -frames:v 1 /workspace/japan_project/final/qc_frames/frame_008s.jpg
-```
-
-Check:
-
-- No bottom subtitles are burned into any shot.
-- `text_overlay_ja` appears as archival-paper plate, not black box.
-- Voice-over is present.
-
-## GitHub Usage
-
-The repo should be private.
-
-First push from Mac:
-
-```bash
-git init
-git add .
-git commit -m "Package production documentary render workflow"
-gh repo create japan-documentary-render-workflow --private --source=. --remote=origin --push
-```
-
-For future updates:
-
-```bash
-git add .
-git commit -m "Update workflow"
-git push
-```
+A 15-second FastH3 render at **1344×768** took about **4 minutes 15–19 seconds** on the tested RTX 5090. This is a measured reference, not a promise for 1280×704 or a full batch. The previous LTX speed benchmarks do not apply to FastH3.

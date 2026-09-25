@@ -15,7 +15,7 @@ SPEC.loader.exec_module(MODULE)
 
 
 class StreamingBatchTests(unittest.TestCase):
-    def test_dynamic_ltx_wave_dispatches_every_runtime_id_once(self):
+    def test_dynamic_fasth3_wave_dispatches_every_runtime_id_once(self):
         calls = []
         lock = threading.Lock()
 
@@ -29,8 +29,8 @@ class StreamingBatchTests(unittest.TestCase):
                 "project": Path(tmp),
                 "input_json": Path(tmp) / "shots.json",
             }
-            args = SimpleNamespace(ltx_workers=2)
-            completed = MODULE.run_ltx_wave(
+            args = SimpleNamespace(fasth3_workers=2)
+            completed = MODULE.run_fasth3_wave(
                 production, [(1, 9), (2, 3), (3, 8), (4, 2), (5, 7)], 1, args,
                 ["http://gpu0", "http://gpu1"], ["/comfy0", "/comfy1"],
             )

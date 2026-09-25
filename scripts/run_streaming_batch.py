@@ -22,17 +22,17 @@ REPO = Path(__file__).resolve().parents[1]
 
 def required_models():
     manifest = json.loads((REPO / "model_manifest.json").read_text())
-    return [entry["filename"] for entry in manifest["models_referenced_by_payload"]]
+    return [entry["filename"] for entry in manifest["models_referenced_by_payload"]] + manifest["required_nodes"]
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Stream images, dual-GPU LTX, CPU rendering, QC, and Drive delivery across a batch.")
+    parser = argparse.ArgumentParser(description="Stream images, dual-GPU FastH3, CPU rendering, QC, and Drive delivery across a batch.")
     parser.add_argument("manifest", help="Batch manifest JSON.")
-    parser.add_argument("--ltx-workers", type=int, default=int(os.getenv("LTX_WORKERS", "2")))
-    parser.add_argument("--comfy-urls", default=os.getenv("LTX_COMFY_URLS", "http://127.0.0.1:18188,http://127.0.0.1:18189"))
-    parser.add_argument("--comfy-dirs", default=os.getenv("LTX_COMFY_DIRS", "/workspace/ComfyUI,/workspace/ComfyUI-gpu1"))
-    parser.add_argument("--comfy-services", default=os.getenv("LTX_COMFY_SERVICES", "comfyui,comfyui-gpu1"))
-    parser.add_argument("--ltx-wave-per-worker", type=int, default=int(os.getenv("LTX_WAVE_PER_WORKER", "30")))
+    parser.add_argument("--fasth3-workers", type=int, default=int(os.getenv("FASTH3_WORKERS", "2")))
+    parser.add_argument("--comfy-urls", default=os.getenv("FASTH3_COMFY_URLS", "http://127.0.0.1:18188,http://127.0.0.1:18189"))
+    parser.add_argument("--comfy-dirs", default=os.getenv("FASTH3_COMFY_DIRS", "/workspace/ComfyUI,/workspace/ComfyUI-gpu1"))
+    parser.add_argument("--comfy-services", default=os.getenv("FASTH3_COMFY_SERVICES", "comfyui,comfyui-gpu1"))
+    parser.add_argument("--fasth3-wave-per-worker", type=int, default=int(os.getenv("FASTH3_WAVE_PER_WORKER", "30")))
     parser.add_argument("--render-workers", type=int, default=int(os.getenv("RENDER_WORKERS", "6")))
     parser.add_argument("--project-root", default="/workspace/projects")
     parser.add_argument("--drive-remote", default=os.getenv("RCLONE_REMOTE", "gdrive"))
@@ -199,9 +199,6 @@ def preflight(productions, urls, no_upload=False, drive_remote="gdrive"):
         )
     models = required_models()
     for url in urls:
-        version = comfy_version(url)
-        if version_tuple(version) < (0, 32, 0):
-            raise RuntimeError(f"ComfyUI >= 0.32.0 required at {url}; found {version or 'unknown'}")
         if not registry_ready(url, models):
             raise RuntimeError(f"ComfyUI registry is not ready with all required models: {url}")
     for production in productions:
@@ -244,7 +241,7 @@ def bootstrap(production):
     voice_dst = project / "inputs" / f"voice{production['voice'].suffix}"
     if production["voice"] != voice_dst.resolve():
         shutil.copy2(production["voice"], voice_dst)
-    shutil.copy2(REPO / "comfy_workflows" / "ltx-2.5-nvfp4-i2v.payload.json", project / "comfy_workflows" / "ltx-2.5-nvfp4-i2v.payload.json")
+    shutil.copy2(REPO / "comfy_workflows" / "fasth3-8step-i2v.payload.json", project / "comfy_workflows" / "fasth3-8step-i2v.payload.json")
     for name in ("grain.mp4", "keyboard-typing-sound-effect-335503.mp3", "YujiBoku-Regular.ttf"):
         shutil.copy2(REPO / "assets" / name, project / "assets" / name)
     production["input_json"] = project / "inputs" / "shot_list.json"
@@ -256,7 +253,7 @@ def image_producer(productions, state, ready_events):
     for production in productions:
         (production["project"] / "images.failed").unlink(missing_ok=True)
     # Fill the expensive GPU queue first across the entire batch. Static assets
-    # follow only after every production has its LTX source images dispatched.
+    # follow only after every production has its FastH3 source images dispatched.
     for media_type in ("video", "static"):
         for production in productions:
             name = production["name"]
@@ -295,33 +292,33 @@ def static_renderer(production, state, image_ready):
     state.set(name, "static_clips", "running")
     run([
         "python3", str(REPO / "scripts" / "render_final_video.py"), "--optimized", "--clips-only", "--media-type", "static",
-        "--workers", str(production["render_workers"]), "--render-root", str(production["project"] / "render_optimized"),
+        "--workers", str(production["render_workers"]), "--render-root", str(production["project"] / "render_fasth3_optimized"),
         "--project", str(production["project"]), "--input-json", str(production["input_json"]),
-        "--images-dir", str(production["project"] / "generated_images"), "--ltx-dir", str(production["project"] / "ltx_videos"),
+        "--images-dir", str(production["project"] / "generated_images"), "--fasth3-dir", str(production["project"] / "fasth3_videos"),
         "--voice", str(production["voice_in"]), "--output", str(production["project"] / "final" / "final_video.mp4"),
     ], log=production["project"] / "logs" / "static_clips.log")
     state.set(name, "static_clips", "complete")
 
 
-def run_ltx_wave(production, wave, wave_index, args, urls, dirs):
+def run_fasth3_wave(production, wave, wave_index, args, urls, dirs):
     tasks = queue.Queue()
     for runtime_id, _duration in wave:
         tasks.put(runtime_id)
 
     def gpu_worker(worker):
         completed = 0
-        log_path = production["project"] / "logs" / f"ltx_wave_{wave_index}_worker_{worker}.log"
+        log_path = production["project"] / "logs" / f"fasth3_wave_{wave_index}_worker_{worker}.log"
         while True:
             try:
                 runtime_id = tasks.get_nowait()
             except queue.Empty:
                 return completed
             command = [
-                "python3", str(REPO / "scripts" / "run_ltx_videos.py"),
+                "python3", str(REPO / "scripts" / "run_fasth3_videos.py"),
                 "--project", str(production["project"]), "--comfy", dirs[worker], "--comfy-url", urls[worker],
                 "--input-json", str(production["input_json"]), "--images-dir", str(production["project"] / "generated_images"),
-                "--output-dir", str(production["project"] / "ltx_videos"),
-                "--payload", str(production["project"] / "comfy_workflows" / "ltx-2.5-nvfp4-i2v.payload.json"),
+                "--output-dir", str(production["project"] / "fasth3_videos"),
+                "--payload", str(production["project"] / "comfy_workflows" / "fasth3-8step-i2v.payload.json"),
                 "--runtime-ids", str(runtime_id), "--wait-for-images",
                 "--image-failure-file", str(production["project"] / "images.failed"),
                 "--worker-label", f"wave_{wave_index}_worker_{worker}",
@@ -332,29 +329,29 @@ def run_ltx_wave(production, wave, wave_index, args, urls, dirs):
             finally:
                 tasks.task_done()
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=args.ltx_workers, thread_name_prefix=f"ltx-wave-{wave_index}") as pool:
-        futures = [pool.submit(gpu_worker, worker) for worker in range(args.ltx_workers)]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=args.fasth3_workers, thread_name_prefix=f"fasth3-wave-{wave_index}") as pool:
+        futures = [pool.submit(gpu_worker, worker) for worker in range(args.fasth3_workers)]
         return sum(future.result() for future in futures)
 
 
-def run_ltx(production, args, urls, dirs, services, state):
+def run_fasth3(production, args, urls, dirs, services, state):
     name = production["name"]
     video_jobs = [
         (index, max(1, math.ceil(float(item["end"]) - float(item["start"]))))
         for index, item in enumerate(production["items"], 1)
         if (item.get("media_type") or "").lower() == "video"
     ]
-    wave_size = args.ltx_wave_per_worker * args.ltx_workers
-    state.set(name, "ltx", "running", {"jobs": len(video_jobs), "wave_size": wave_size})
+    wave_size = args.fasth3_wave_per_worker * args.fasth3_workers
+    state.set(name, "fasth3", "running", {"jobs": len(video_jobs), "wave_size": wave_size})
     for wave_index, offset in enumerate(range(0, len(video_jobs), wave_size), 1):
         wave = video_jobs[offset:offset + wave_size]
-        completed = run_ltx_wave(production, wave, wave_index, args, urls, dirs)
+        completed = run_fasth3_wave(production, wave, wave_index, args, urls, dirs)
         if completed != len(wave):
-            raise RuntimeError(f"LTX wave {wave_index} count mismatch: expected={len(wave)} completed={completed}")
-        state.set(name, "ltx", "running", {"completed": min(offset + len(wave), len(video_jobs)), "jobs": len(video_jobs)})
+            raise RuntimeError(f"FastH3 wave {wave_index} count mismatch: expected={len(wave)} completed={completed}")
+        state.set(name, "fasth3", "running", {"completed": min(offset + len(wave), len(video_jobs)), "jobs": len(video_jobs)})
         if offset + len(wave) < len(video_jobs):
             restart_comfy(services, urls)
-    state.set(name, "ltx", "complete", {"jobs": len(video_jobs)})
+    state.set(name, "fasth3", "complete", {"jobs": len(video_jobs)})
 
 
 def finalize(production, args, state, image_ready, static_future):
@@ -366,14 +363,14 @@ def finalize(production, args, state, image_ready, static_future):
     run([
         "python3", str(REPO / "scripts" / "validate_project.py"), "--project", str(project),
         "--input-json", str(production["input_json"]), "--voice", str(production["voice_in"]),
-        "--images-dir", str(project / "generated_images"), "--ltx-dir", str(project / "ltx_videos"),
+        "--images-dir", str(project / "generated_images"), "--fasth3-dir", str(project / "fasth3_videos"),
     ], log=project / "logs" / "validate.log")
     final = project / "final" / production["drive_name"]
     run([
         "python3", str(REPO / "scripts" / "render_final_video.py"), "--optimized", "--workers", str(args.render_workers),
-        "--render-root", str(project / "render_optimized"), "--project", str(project),
+        "--render-root", str(project / "render_fasth3_optimized"), "--project", str(project),
         "--input-json", str(production["input_json"]), "--images-dir", str(project / "generated_images"),
-        "--ltx-dir", str(project / "ltx_videos"), "--voice", str(production["voice_in"]), "--output", str(final),
+        "--fasth3-dir", str(project / "fasth3_videos"), "--voice", str(production["voice_in"]), "--output", str(final),
     ], log=project / "logs" / "final_render.log")
     report = project / "final" / "qc_report.json"
     run([
@@ -411,18 +408,18 @@ def main():
     urls = [value.strip() for value in args.comfy_urls.split(",") if value.strip()]
     dirs = [value.strip() for value in args.comfy_dirs.split(",") if value.strip()]
     services = [value.strip() for value in args.comfy_services.split(",") if value.strip()]
-    if args.ltx_workers < 1 or len(urls) < args.ltx_workers or len(dirs) < args.ltx_workers:
-        raise SystemExit("ltx-workers requires matching comfy URLs and directories")
-    if args.ltx_wave_per_worker < 1 or args.render_workers < 1:
-        raise SystemExit("ltx-wave-per-worker and render-workers must be positive")
-    if len(set(urls[:args.ltx_workers])) != args.ltx_workers or len(set(dirs[:args.ltx_workers])) != args.ltx_workers:
-        raise SystemExit("each LTX worker requires a unique ComfyUI URL and directory")
+    if args.fasth3_workers < 1 or len(urls) < args.fasth3_workers or len(dirs) < args.fasth3_workers:
+        raise SystemExit("fasth3-workers requires matching comfy URLs and directories")
+    if args.fasth3_wave_per_worker < 1 or args.render_workers < 1:
+        raise SystemExit("fasth3-wave-per-worker and render-workers must be positive")
+    if len(set(urls[:args.fasth3_workers])) != args.fasth3_workers or len(set(dirs[:args.fasth3_workers])) != args.fasth3_workers:
+        raise SystemExit("each FastH3 worker requires a unique ComfyUI URL and directory")
     if not args.plan:
-        for comfy_dir in dirs[:args.ltx_workers]:
+        for comfy_dir in dirs[:args.fasth3_workers]:
             if not Path(comfy_dir).is_dir():
                 raise SystemExit(f"ComfyUI directory does not exist: {comfy_dir}")
-    if services and len(services) < args.ltx_workers:
-        raise SystemExit("comfy-services must be empty or provide one service per LTX worker")
+    if services and len(services) < args.fasth3_workers:
+        raise SystemExit("comfy-services must be empty or provide one service per FastH3 worker")
     manifest = Path(args.manifest).resolve()
     productions = normalize_productions(manifest, args.project_root)
     if args.plan:
@@ -436,16 +433,16 @@ def main():
                 "shots": len(items),
                 "video_images": len(videos),
                 "static_images": len(items) - len(videos),
-                "ltx_waves": math.ceil(len(videos) / (args.ltx_wave_per_worker * args.ltx_workers)) if videos else 0,
+                "fasth3_waves": math.ceil(len(videos) / (args.fasth3_wave_per_worker * args.fasth3_workers)) if videos else 0,
                 "project": str(production["project"]),
                 "drive_name": production["drive_name"],
             })
-        print(json.dumps({"ltx_workers": args.ltx_workers, "wave_per_worker": args.ltx_wave_per_worker, "productions": plan}, indent=2))
+        print(json.dumps({"fasth3_workers": args.fasth3_workers, "wave_per_worker": args.fasth3_wave_per_worker, "productions": plan}, indent=2))
         return
     state = State(manifest.with_suffix(".state.sqlite3"))
     ready_events = {production["name"]: threading.Event() for production in productions}
-    wait_apis(urls[:args.ltx_workers])
-    preflight(productions, urls[:args.ltx_workers], args.no_upload, args.drive_remote)
+    wait_apis(urls[:args.fasth3_workers])
+    preflight(productions, urls[:args.fasth3_workers], args.no_upload, args.drive_remote)
     for production in productions:
         production["render_workers"] = args.render_workers
         bootstrap(production)
@@ -463,15 +460,15 @@ def main():
     try:
         for production_index, production in enumerate(productions):
             try:
-                run_ltx(production, args, urls, dirs, services, state)
+                run_fasth3(production, args, urls, dirs, services, state)
             except Exception as exc:
-                state.set(production["name"], "ltx", "failed", {"error": str(exc)})
+                state.set(production["name"], "fasth3", "failed", {"error": str(exc)})
                 raise
             final_futures.append(final_pool.submit(
                 safe_finalize, production, args, state, ready_events[production["name"]], static_futures[production["name"]]
             ))
             if production_index + 1 < len(productions):
-                restart_comfy(services, urls[:args.ltx_workers])
+                restart_comfy(services, urls[:args.fasth3_workers])
         image_future.result()
         for future in final_futures:
             future.result()
