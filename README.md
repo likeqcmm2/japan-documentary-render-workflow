@@ -4,7 +4,7 @@ Produce a documentary-style YouTube video from a shot-list JSON and voice-over a
 
 ## Pipeline
 
-1. Generate a 1536×864 PNG for each shot with OpenAI `gpt-image-2.5-flare`. Successful images are cached; failed requests are retried for three rounds.
+1. Generate a 1536×864 PNG for each shot with OpenAI `gpt-image-2.5-sunburst`. Successful images are cached; failed requests are retried for three rounds.
 2. Feed each video shot's PNG and `edit.motion_prompt` to the video-only FastH3 graph. Its three models are listed in `model_manifest.json`.
 3. Normalize each FastH3 source from native 24 fps to **1280×704, 25 fps, no audio**, with exactly `round(end * 25) - round(start * 25)` frames. The source PNG is center-cropped by a small amount before scaling, avoiding aspect distortion.
 4. Render static and video shots into the absolute 25 fps timeline. Retain Ken Burns, film grain, vignette, Japanese archival text plates, and typing effects.
